@@ -1,0 +1,82 @@
+{% load static %}
+
+<div
+  id="player-card-{{ p.id }}"
+  class="card-glass player-card"
+  data-name="{{ p.name|lower }}"
+  data-role="{{ p.role|default:'' }}"
+  data-active="{% if p.is_active %}1{% else %}0{% endif %}"
+>
+  <div class="glow"></div>
+
+  {% if can_manage %}
+    <div class="player-actions">
+      <button
+        class="btn btn-sm btn-outline-light"
+        data-bs-toggle="modal"
+        data-bs-target="#playerEditModal"
+        data-edit-url="{% url 'player_edit' slug=tournament.slug player_id=p.id %}"
+        data-player-id="{{ p.id }}"
+        data-player-name="{{ p.name|escapejs }}"
+        data-player-phone="{{ p.phone|default:''|escapejs }}"
+        data-player-city="{{ p.city|default:''|escapejs }}"
+        data-player-age="{{ p.age|default:'' }}"
+        data-player-role="{{ p.role|default:'' }}"
+        data-player-batting="{{ p.batting_style|default:''|escapejs }}"
+        data-player-bowling="{{ p.bowling_style|default:''|escapejs }}"
+        data-player-base="{{ p.base_price|default:'0' }}"
+        data-player-reserve="{{ p.reserve_price|default:'' }}"
+        data-player-stats="{{ p.stats|default:''|escapejs }}"
+        data-player-notes="{{ p.notes|default:''|escapejs }}"
+        data-player-matches="{{ p.stats.matches|default:'' }}"
+        data-player-runs="{{ p.stats.runs|default:'' }}"
+        data-player-wickets="{{ p.stats.wickets|default:'' }}"
+        data-player-overs="{{ p.stats.overs|default:'' }}"
+        data-player-eco="{{ p.stats.eco|default:'' }}"
+        data-player-bat-avg="{{ p.stats.bat_avg|default:'' }}"
+        data-player-bat-sr="{{ p.stats.bat_sr|default:'' }}"
+        data-player-active="{{ p.is_active|yesno:'1,0' }}"
+      >Edit</button>
+    </div>
+  {% endif %}
+
+  <div class="player-top">
+{#    <div class="avatar">#}
+{#      {% if p.photo %}#}
+{#        <img src="{{ p.photo.url }}" alt="{{ p.name }}">#}
+{#      {% else %}#}
+{#        <img src="{% static 'img/player-placeholder.png' %}" alt="{{ p.name }}">#}
+{#      {% endif %}#}
+{#    </div>#}
+
+    <div class="flex-grow-1">
+      <div style="font-weight:900; font-size:1.02rem; line-height:1.15;">{{ p.name }}</div>
+      <div class="muted" style="font-size:.9rem;">
+        {% if p.city %}{{ p.city }}{% else %}—{% endif %}
+        {% if p.age %} • {{ p.age }} yrs{% endif %}
+      </div>
+
+      <div class="d-flex flex-wrap gap-2 mt-2">
+        <span class="role-chip">
+          {% if p.role %}{{ p.get_role_display }}{% else %}Role: —{% endif %}
+        </span>
+
+        {% if p.is_active %}
+          <span class="badge-soft badge-yes">Active</span>
+        {% else %}
+          <span class="badge-soft badge-no">Inactive</span>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Base/Reserve removed to avoid overlap with Edit button #}
+  </div>
+
+  {% if p.stats %}
+    <div class="divider"></div>
+    <div class="muted" style="font-size:.9rem;">
+      <strong style="color:rgba(243,247,255,.9);">Stats:</strong>
+      <span style="word-break:break-word;">{{ p.stats }}</span>
+    </div>
+  {% endif %}
+</div>

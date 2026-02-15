@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% load static inr %}
+{% block title %}Teams Dashboard | {{ tournament.name }}{% endblock %}
+
+{% block head %}
+<style>
+  .grid2{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  @media (max-width: 1100px){
+    .grid2{ grid-template-columns: 1fr; }
+  }
+
+  .teamCard{
+    padding: 16px;
+    border-radius: 22px;
+    border: 1px solid rgba(255,255,255,.16);
+    background: linear-gradient(180deg, rgba(16,24,45,.78), rgba(12,18,34,.70));
+    box-shadow: 0 18px 60px rgba(0,0,0,.45);
+  }
+
+  .teamTop{
+    display:flex;
+    gap: 12px;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom: 10px;
+  }
+  .teamLeft{
+    display:flex; gap: 12px; align-items:center;
+  }
+  .tlogo{
+    width: 56px; height: 56px;
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,.16);
+    background: rgba(255,255,255,.06);
+    overflow:hidden;
+  }
+  .tlogo img{ width:100%; height:100%; object-fit:cover; }
+
+  .tname{
+    font-weight: 950;
+    margin: 0;
+    font-size: 1.25rem;
+  }
+
+  .tiles{
+    display:grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin: 10px 0 12px;
+  }
+  @media (max-width: 650px){
+    .tiles{ grid-template-columns: 1fr 1fr; }
+  }
+  .tile{
+    border: 1px solid rgba(255,255,255,.14);
+    background: rgba(255,255,255,.04);
+    border-radius: 16px;
+    padding: 10px;
+    text-align:center;
+  }
+  .tile .big{
+    font-weight: 950;
+    font-size: 1.15rem;
+  }
+  .tile .lab{
+    color: var(--muted);
+    font-weight: 850;
+    font-size: .78rem;
+    margin-top: 2px;
+  }
+
+  .plist{
+    margin-top: 10px;
+    border-top: 1px solid rgba(255,255,255,.12);
+    padding-top: 10px;
+    max-height: 420px;
+    overflow:auto;
+  }
+  .prow{
+    display:grid;
+    grid-template-columns: 34px 1.6fr 1fr 110px;
+    gap: 10px;
+    align-items:center;
+    padding: 9px 6px;
+    border-bottom: 1px solid rgba(255,255,255,.10);
+  }
+  .prow:last-child{ border-bottom:0; }
+  .pname{ font-weight: 900; }
+  .pmuted{ color: var(--muted); font-weight: 750; font-size:.9rem; }
+  .price{
+    justify-self:end;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(249,115,22,.18);
+    border: 1px solid rgba(249,115,22,.35);
+    font-weight: 950;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+  <div>
+    <div class="muted" style="font-weight:800;">{{ tournament.name }}</div>
+    <h2 style="font-weight:950;margin:0;">Teams Dashboard</h2>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-light" href="/t/{{ tournament.slug }}/auction/">Back to Auction</a>
+    <a class="btn btn-outline-light" href="/t/{{ tournament.slug }}/">Tournament</a>
+    <a class="btn btn-accent" href="/t/{{ tournament.slug }}/teams-export/">Export Teams</a>
+  </div>
+</div>
+
+<div class="grid2">
+  {% for item in teams %}
+    {% with t=item.team %}
+    <div class="teamCard">
+      <div class="teamTop">
+        <div class="teamLeft">
+          <div class="tlogo">
+            {% if t.logo %}
+              <img src="{{ t.logo.url }}" alt="{{ t.name }}">
+            {% else %}
+              <img src="{% static 'img/team-placeholder.png' %}" alt="Team">
+            {% endif %}
+          </div>
+          <div>
+            <p class="tname">{{ t.name }}</p>
+            <div class="pmuted">{{ item.players_count }} players</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tiles">
+        <div class="tile">
+          <div class="big">₹ {{ t.purse_total|inr }}</div>
+          <div class="lab">TOTAL PURSE</div>
+        </div>
+        <div class="tile">
+          <div class="big">₹ {{ item.spent|inr }}</div>
+          <div class="lab">USED</div>
+        </div>
+        <div class="tile">
+          <div class="big">₹ {{ t.purse_remaining|inr }}</div>
+          <div class="lab">BALANCE</div>
+        </div>
+        <div class="tile">
+          <div class="big">{{ item.players_count }}</div>
+          <div class="lab">PLAYERS</div>
+        </div>
+      </div>
+
+      <div class="plist">
+        {% if item.players %}
+          {% for tp in item.players %}
+            <div class="prow">
+              <div class="pmuted">{{ forloop.counter }}</div>
+              <div>
+                <div class="pname">{{ tp.player.name }}</div>
+                <div class="pmuted">
+                  {% if tp.player.role %}{{ tp.player.get_role_display }}{% else %}—{% endif %}
+                </div>
+              </div>
+              <div class="pmuted">
+                {{ tp.designation }}
+              </div>
+              <div class="price">₹ {{ tp.bought_price|inr }}</div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="pmuted">No players bought yet.</div>
+        {% endif %}
+      </div>
+    </div>
+    {% endwith %}
+  {% endfor %}
+</div>
+{% endblock %}

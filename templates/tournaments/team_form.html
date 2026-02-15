@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Create Team | {{ tournament.name }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-8">
+    <div class="card-glass p-4">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div>
+          <div class="muted">{{ tournament.name }}</div>
+          <h2 class="mb-1" style="font-weight:900;">Create Team</h2>
+        </div>
+        <a class="btn btn-outline-light" href="{% url 'tournament_detail' slug=tournament.slug %}">Back</a>
+      </div>
+
+      <div class="divider"></div>
+
+      <form method="post" enctype="multipart/form-data" novalidate>
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">{{ form.name.label }}</label>
+            {{ form.name }}
+            {% for e in form.name.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">{{ form.short_name.label }}</label>
+            {{ form.short_name }}
+            <div class="muted" style="font-size:.85rem;">Optional. Auto-generated if blank.</div>
+            {% for e in form.short_name.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="col-12 col-md-8">
+            <label class="form-label">{{ form.logo.label }}</label>
+            {{ form.logo }}
+            {% for e in form.logo.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">{{ form.purse_total.label }}</label>
+            {{ form.purse_total }}
+            {% for e in form.purse_total.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">{{ form.purse_remaining.label }}</label>
+            {{ form.purse_remaining }}
+            <div class="muted" style="font-size:.85rem;">If left blank, it will default to total purse.</div>
+            {% for e in form.purse_remaining.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">{{ form.min_players.label }}</label>
+            {{ form.min_players }}
+            {% for e in form.min_players.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">{{ form.max_players.label }}</label>
+            {{ form.max_players }}
+            {% for e in form.max_players.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="col-12">
+            <div class="form-check">
+              {{ form.is_active }}
+              <label class="form-check-label">Active</label>
+            </div>
+            {% for e in form.is_active.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <button type="submit" class="btn btn-accent">Create team</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

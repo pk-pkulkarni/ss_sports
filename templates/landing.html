@@ -1,0 +1,432 @@
+{% extends "base.html" %}
+
+{% block title %}Sundar Sanskruti Cricket | SS Cricket{% endblock %}
+
+{% block head %}
+<style>
+  /* Landing page helpers (keeps same app theme from base.html) */
+  section[id]{ scroll-margin-top: 90px; }
+
+  .hero-title{ font-weight: 900; letter-spacing: .2px; }
+
+  .stat-box{
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: rgba(255,255,255,.04);
+    padding: 1rem;
+    height: 100%;
+    text-align: center;
+  }
+  .stat-num{ font-weight: 900; font-size: 1.35rem; }
+  .stat-label{ color: var(--muted); font-size: .9rem; }
+
+  .mini-card{
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: rgba(255,255,255,.04);
+    padding: 1rem;
+    height: 100%;
+  }
+
+  .avatar{
+    width: 44px; height: 44px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    color: #071021;
+    background: linear-gradient(90deg, var(--accent2), var(--accent3));
+    flex: 0 0 auto;
+  }
+
+  .photo-preview{
+    border: 1px dashed var(--line);
+    border-radius: 16px;
+    background: rgba(255,255,255,.03);
+    height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .photo-preview.has-img{ background-size: cover; background-position: center; border-style: solid; }
+
+  .req-star{
+    color: #ff6b6b;
+    margin-left: .2rem;
+    font-weight: 900;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<section id="home" class="py-4 py-md-5">
+  <div class="row g-4 align-items-stretch">
+    <div class="col-12 col-lg-7">
+      <div class="card-glass p-4 p-md-5 h-100">
+        <div class="mb-3">
+          <span class="chip">Society Cricket Tournament</span>
+        </div>
+
+        <h1 class="hero-title display-6 mb-3">Sundar Sanskruti Cricket Tournament</h1>
+        <p class="muted fs-5 mb-4">
+          We host a friendly, competitive cricket tournament within our society — built on sportsmanship, teamwork, and community spirit.
+        </p>
+
+        <div class="d-flex flex-wrap gap-2">
+          <a class="btn btn-accent" href="{% url 'landing' %}#registration">Register as Player</a>
+          <a class="btn btn-outline-light" href="{% url 'login' %}">Go to Auction</a>
+          <a class="btn btn-outline-light" href="{% url 'landing' %}#about">About us</a>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="row g-3">
+          <div class="col-12 col-md-4">
+            <div class="stat-box">
+              <div class="stat-num">14</div>
+              <div class="stat-label">Teams (2025)</div>
+            </div>
+          </div>
+          <div class="col-12 col-md-4">
+            <div class="stat-box">
+              <div class="stat-num">4</div>
+              <div class="stat-label">Divisions (Men/Women/Boys/Girls)</div>
+            </div>
+          </div>
+          <div class="col-12 col-md-4">
+            <div class="stat-box">
+              <div class="stat-num" style="font-size:1.05rem;">SS Super Kings</div>
+              <div class="stat-label">2025 Men's Winner</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-5">
+      <div class="card-glass p-4 p-md-5 h-100">
+        <h2 class="h4" style="font-weight:900;">Club highlights</h2>
+        <p class="muted mb-3">What we focus on every season.</p>
+
+        <ul class="mb-0">
+          <li>Organize yearly society tournament</li>
+          <li>Promote fair play &amp; inclusivity</li>
+          <li>Capture memories (photos &amp; videos)</li>
+          <li>Build future-ready stats &amp; records</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="about" class="py-4 py-md-5">
+  <div class="card-glass p-4 p-md-5">
+    <div class="mb-4">
+      <h2 class="mb-2" style="font-weight:900;">About the club</h2>
+      <p class="muted mb-0">Sundar Sanskruti Sports Club brings residents together through cricket, creating a positive sporting culture in our society.</p>
+    </div>
+
+    <div class="row g-4">
+      <div class="col-12 col-lg-6">
+        <div class="mini-card">
+          <h3 class="h5" style="font-weight:900;">What we do</h3>
+          <p class="mb-2">
+            We plan and host our annual society cricket tournament and related events — from registrations to match-day operations, awards and celebrations.
+          </p>
+          <ul class="mb-0">
+            <li>Season planning, fixtures &amp; scheduling</li>
+            <li>Team management and communications</li>
+            <li>Match scoring and simple stats tracking</li>
+            <li>Event galleries and highlights</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="col-12 col-lg-6">
+        <div class="mini-card">
+          <h3 class="h5" style="font-weight:900;">Our values</h3>
+          <div class="row g-3">
+            <div class="col-12 col-sm-6">
+              <div class="mini-card" style="background: rgba(255,255,255,.02);">
+                <div style="font-weight:900;">Sportsmanship</div>
+                <div class="muted">Respect, integrity, and fair play always.</div>
+              </div>
+            </div>
+            <div class="col-12 col-sm-6">
+              <div class="mini-card" style="background: rgba(255,255,255,.02);">
+                <div style="font-weight:900;">Community</div>
+                <div class="muted">Cricket that brings neighbors together.</div>
+              </div>
+            </div>
+            <div class="col-12 col-sm-6">
+              <div class="mini-card" style="background: rgba(255,255,255,.02);">
+                <div style="font-weight:900;">Inclusion</div>
+                <div class="muted">Welcoming players of all skill levels.</div>
+              </div>
+            </div>
+            <div class="col-12 col-sm-6">
+              <div class="mini-card" style="background: rgba(255,255,255,.02);">
+                <div style="font-weight:900;">Consistency</div>
+                <div class="muted">Transparent rules and reliable organization.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="mb-3">
+      <h3 class="h5" style="font-weight:900;">Committee</h3>
+      <p class="muted mb-0">Add or update committee roles anytime.</p>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-12 col-md-4">
+        <div class="mini-card d-flex gap-3 align-items-center">
+          <div class="avatar">P</div>
+          <div>
+            <div style="font-weight:900;">President</div>
+            <div class="muted">Name TBD</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-md-4">
+        <div class="mini-card d-flex gap-3 align-items-center">
+          <div class="avatar">S</div>
+          <div>
+            <div style="font-weight:900;">Secretary</div>
+            <div class="muted">Name TBD</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-md-4">
+        <div class="mini-card d-flex gap-3 align-items-center">
+          <div class="avatar">C</div>
+          <div>
+            <div style="font-weight:900;">Tournament Coordinator</div>
+            <div class="muted">Name TBD</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="registration" class="py-4 py-md-5">
+  <div class="card-glass p-4 p-md-5">
+    <div class="mb-4">
+      <h2 class="mb-2" style="font-weight:900;">Registration</h2>
+      <p class="muted mb-0">Register as a player for a tournament</p>
+    </div>
+
+    <div class="row g-4">
+      <div class="col-12 col-lg-7">
+        <form class="mini-card" id="registrationForm" method="post" enctype="multipart/form-data" action="{% url 'landing' %}#registration" autocomplete="on">
+          {% csrf_token %}
+
+          {% if registration_form.non_field_errors %}
+            <div class="alert alert-danger">
+              {{ registration_form.non_field_errors }}
+            </div>
+          {% endif %}
+
+          {% if not has_tournaments %}
+            <div class="alert alert-warning">
+              No tournaments are available for registration yet.
+            </div>
+          {% endif %}
+
+          <div class="mb-3">
+            <label class="form-label" for="{{ registration_form.tournament.id_for_label }}">
+              Tournament{% if registration_form.tournament.field.required %}<span class="req-star">*</span>{% endif %}
+            </label>
+            {{ registration_form.tournament }}
+            {% for error in registration_form.tournament.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="{{ registration_form.name.id_for_label }}">
+              Player name{% if registration_form.name.field.required %}<span class="req-star">*</span>{% endif %}
+            </label>
+            {{ registration_form.name }}
+            {% for error in registration_form.name.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="{{ registration_form.gender.id_for_label }}">
+              Gender{% if registration_form.gender.field.required %}<span class="req-star">*</span>{% endif %}
+            </label>
+            {{ registration_form.gender }}
+            {% for error in registration_form.gender.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="{{ registration_form.photo.id_for_label }}">
+              Photo upload{% if registration_form.photo.field.required %}<span class="req-star">*</span>{% endif %}
+            </label>
+            {{ registration_form.photo }}
+            <div class="muted" style="font-size:.9rem; margin-top:.35rem;">Accepted: JPG/PNG.</div>
+            {% for error in registration_form.photo.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <label class="form-label" for="{{ registration_form.building.id_for_label }}">
+                Building{% if registration_form.building.field.required %}<span class="req-star">*</span>{% endif %}
+              </label>
+              {{ registration_form.building }}
+              {% for error in registration_form.building.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label" for="{{ registration_form.flat_no.id_for_label }}">
+                Flat no.{% if registration_form.flat_no.field.required %}<span class="req-star">*</span>{% endif %}
+              </label>
+              {{ registration_form.flat_no }}
+              {% for error in registration_form.flat_no.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+            </div>
+          </div>
+
+          <div class="row g-3 mt-0">
+            <div class="col-12 col-md-6">
+              <label class="form-label" for="{{ registration_form.dob.id_for_label }}">
+                DOB{% if registration_form.dob.field.required %}<span class="req-star">*</span>{% endif %}
+              </label>
+              {{ registration_form.dob }}
+              {% for error in registration_form.dob.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label" for="{{ registration_form.phone.id_for_label }}">
+                Contact no.{% if registration_form.phone.field.required %}<span class="req-star">*</span>{% endif %}
+              </label>
+              {{ registration_form.phone }}
+              {% for error in registration_form.phone.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+            </div>
+          </div>
+
+          <div class="row g-3 mt-0">
+            <div class="col-12 col-md-4">
+              <label class="form-label" for="{{ registration_form.jersey_no.id_for_label }}">
+                Jersey no.{% if registration_form.jersey_no.field.required %}<span class="req-star">*</span>{% endif %}
+              </label>
+              {{ registration_form.jersey_no }}
+              {% for error in registration_form.jersey_no.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-12 col-md-8">
+              <label class="form-label" for="{{ registration_form.jersey_name.id_for_label }}">
+                Jersey name{% if registration_form.jersey_name.field.required %}<span class="req-star">*</span>{% endif %}
+              </label>
+              {{ registration_form.jersey_name }}
+              {% for error in registration_form.jersey_name.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+            </div>
+          </div>
+
+          <div class="row g-3 mt-0">
+            <div class="col-12 col-md-6">
+              <label class="form-label" for="{{ registration_form.jersey_size.id_for_label }}">
+                Jersey size{% if registration_form.jersey_size.field.required %}<span class="req-star">*</span>{% endif %}
+              </label>
+              {{ registration_form.jersey_size }}
+              {% for error in registration_form.jersey_size.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label" for="{{ registration_form.payment_screenshot.id_for_label }}">
+                Payment screenshot{% if registration_form.payment_screenshot.field.required %}<span class="req-star">*</span>{% endif %}
+              </label>
+              {{ registration_form.payment_screenshot }}
+              <div class="muted" style="font-size:.9rem; margin-top:.35rem;">Accepted: JPG/PNG.</div>
+              {% for error in registration_form.payment_screenshot.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+            </div>
+          </div>
+
+          <div class="mt-3 d-flex flex-wrap gap-2">
+            <button class="btn btn-accent" type="submit" {% if not has_tournaments %}disabled{% endif %}>Submit registration</button>
+            <a class="btn btn-outline-light" href="{% url 'login' %}">Go to Auction</a>
+          </div>
+        </form>
+      </div>
+
+      <div class="col-12 col-lg-5">
+        <div class="mini-card h-100">
+          <h3 class="h5" style="font-weight:900;">What happens next?</h3>
+          <p class="muted">We will generate:</p>
+          <ul>
+            <li>Team rosters</li>
+            <li>Player profiles with photos</li>
+            <li>Season stats and match history</li>
+            <li>Auction-ready player list</li>
+          </ul>
+
+          <div class="divider"></div>
+
+          {% if qr_code_url %}
+            <div class="muted mb-2">Payment QR</div>
+            <div style="display:flex; justify-content:center;">
+              <div style="background:#fff; padding:.65rem; border-radius:14px; border:1px solid var(--line);">
+                <img src="{{ qr_code_url }}" alt="Payment QR" style="width:220px; height:auto; display:block;" />
+              </div>
+            </div>
+            <div class="muted" style="font-size:.9rem; margin-top:.5rem;">Scan to pay, then upload the payment screenshot in the form.</div>
+            <div class="divider"></div>
+          {% endif %}
+
+{#          <div class="muted mb-2">Photo preview</div>#}
+{#          <div class="photo-preview" id="photoPreview"><span class="muted">Choose a photo to preview</span></div>#}
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="d-flex flex-wrap justify-content-between gap-2">
+      <div class="muted">Sundar Sanskruti Sports Club</div>
+      <a class="muted" href="{% url 'landing' %}#home" style="text-decoration:none;">Back to top</a>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{% if registration_form.errors %}
+<script>
+  // Bring the user straight to the form when there are validation errors.
+  window.location.hash = '#registration';
+</script>
+{% endif %}
+
+<script>
+  (function () {
+    const photo = document.getElementById('id_photo');
+    const preview = document.getElementById('photoPreview');
+
+    function resetPreview() {
+      if (!preview) return;
+      preview.classList.remove('has-img');
+      preview.style.backgroundImage = 'none';
+      preview.innerHTML = '<span class="muted">Choose a photo to preview</span>';
+    }
+
+    if (photo && preview) {
+      photo.addEventListener('change', function () {
+        const file = photo.files && photo.files[0];
+        if (!file) {
+          resetPreview();
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          preview.classList.add('has-img');
+          preview.style.backgroundImage = 'url(' + e.target.result + ')';
+          preview.innerHTML = '';
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    resetPreview();
+  })();
+</script>
+{% endblock %}

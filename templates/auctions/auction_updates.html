@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}Live Auction Updates | {{ tournament.name }}{% endblock %}
+
+{% block head %}
+<style>
+  .updates-wrap{
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .feed{
+    max-height: 70vh;
+    overflow:auto;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .event{
+    border:1px solid rgba(255,255,255,.14);
+    background: rgba(255,255,255,.04);
+    border-radius: 14px;
+    padding: 12px 14px;
+  }
+  .event-time{
+    font-size:.8rem;
+    color: rgba(243,247,255,.6);
+    margin-top:4px;
+  }
+  .event-up{
+    border-left: 6px solid #fbbf24;
+    background: linear-gradient(90deg, rgba(251,191,36,.20), rgba(56,189,248,.10));
+    font-weight: 900;
+  }
+  .event-up strong{ color: rgba(255,255,255,.96); }
+  .event-bid{ border-left: 6px solid #38bdf8; }
+  .event-milestone{ border-left: 6px solid #a78bfa; background: rgba(167,139,250,.12); }
+  .event-sold{ border-left: 6px solid #22c55e; background: rgba(34,197,94,.12); font-weight:800; }
+  .event-unsold{ border-left: 6px solid #f87171; background: rgba(248,113,113,.12); font-weight:800; }
+  .event-info{ border-left: 6px solid #94a3b8; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card-glass p-4 updates-wrap">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <div>
+      <div class="muted">{{ tournament.name }}</div>
+      <h2 class="mb-1" style="font-weight:900;">Live Auction Updates</h2>
+    </div>
+    <a class="btn btn-outline-light" href="{% url 'tournament_detail' slug=tournament.slug %}">Back</a>
+  </div>
+  <div class="divider"></div>
+
+  {% if not auction %}
+    <div class="muted">No auction found for this tournament.</div>
+  {% else %}
+    <div id="feed" class="feed">
+      <div class="muted">Waiting for updates…</div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if auction %}
+<script>
+  const feed = document.getElementById("feed");
+  let lastId = 0;
+
+  function addEvent(e){
+    const div = document.createElement("div");
+
+    const eventType = (e.event_type || "").toUpperCase();
+    const level = (e.level || "INFO").toLowerCase();
+    div.className = eventType === "LOT_START" ? "event event-up" : `event event-${level}`;
+
+    const msgEl = document.createElement("div");
+    if (eventType === "LOT_START" && (e.player || e.message)) {
+      // Highlight the player name for "up for auction" events
+      if (e.player) {
+        const strong = document.createElement("strong");
+        strong.textContent = e.player;
+        msgEl.appendChild(strong);
+
+        const lotNoTxt = e.lot_no ? ` (Lot #${e.lot_no})` : "";
+        msgEl.appendChild(document.createTextNode(` is up for auction${lotNoTxt}.`));
+      } else {
+        msgEl.textContent = e.message || "";
+      }
+    } else {
+      msgEl.textContent = e.message || "";
+    }
+
+    const timeEl = document.createElement("div");
+    timeEl.className = "event-time";
+    timeEl.textContent = e.time || "";
+
+    div.appendChild(msgEl);
+    div.appendChild(timeEl);
+
+    // newest first
+    feed.prepend(div);
+  }
+
+  async function fetchUpdates(){
+    const res = await fetch("{% url 'auction_updates_feed' slug=tournament.slug %}?after=" + lastId);
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok || out.ok === false) return;
+    const events = out.events || [];
+    if (!events.length) return;
+
+    // Clear placeholder
+    if (feed.firstElementChild && feed.firstElementChild.classList.contains("muted")) {
+      feed.innerHTML = "";
+    }
+
+    const wasNearTop = feed.scrollTop < 20;
+
+    for (const e of events){
+      lastId = Math.max(lastId, e.id);
+      addEvent(e);
+    }
+
+    if (wasNearTop) {
+      feed.scrollTop = 0;
+    }
+  }
+
+  fetchUpdates();
+  setInterval(fetchUpdates, 3000);
+</script>
+{% endif %}
+{% endblock %}

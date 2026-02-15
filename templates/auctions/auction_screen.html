@@ -1,0 +1,1315 @@
+{% extends "base.html" %}
+{% load static inr %}
+{% block title %}Auction Screen | {{ tournament.name }}{% endblock %}
+
+{% block head %}
+    <style>
+        .screen {
+            display: grid;
+            grid-template-columns: 1.25fr .75fr;
+            gap: 14px;
+        }
+
+        @media (max-width: 992px) {
+            .screen {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            padding: 16px;
+            border-radius: 22px;
+            border: 1px solid rgba(255, 255, 255, .16);
+            background: linear-gradient(180deg, rgba(16, 24, 45, .78), rgba(12, 18, 34, .70));
+            box-shadow: 0 18px 60px rgba(0, 0, 0, .45);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .panel:before {
+            content: "";
+            position: absolute;
+            inset: -120px -120px auto auto;
+            width: 340px;
+            height: 340px;
+            background: radial-gradient(circle at 30% 30%, rgba(34, 197, 94, .22), transparent 60%);
+            pointer-events: none;
+        }
+
+        .panel:after {
+            content: "";
+            position: absolute;
+            inset: -130px auto auto -130px;
+            width: 360px;
+            height: 360px;
+            background: radial-gradient(circle at 40% 40%, rgba(56, 189, 248, .18), transparent 60%);
+            pointer-events: none;
+        }
+
+        .topbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .title {
+            font-weight: 900;
+            letter-spacing: .2px;
+            margin: 0;
+        }
+
+        .live-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            padding: .30rem .7rem;
+            border-radius: 999px;
+            border: 1px solid rgba(34, 197, 94, .35);
+            background: rgba(34, 197, 94, .12);
+            color: #b9f6c6;
+            font-weight: 900;
+            font-size: .85rem;
+        }
+
+        .dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 999px;
+            background: #22c55e;
+            box-shadow: 0 0 0 6px rgba(34, 197, 94, .18);
+            animation: pulse 1.1s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.12);
+                opacity: .75;
+            }
+        }
+
+        .playerCard {
+            display: flex;
+            gap: 18px;
+            align-items: center;
+            padding: 6px 0;
+        }
+
+        .avatar {
+            width: 190px;
+            height: 190px;
+            border-radius: 32px;
+            border: 1px solid rgba(255, 255, 255, .18);
+            background: rgba(255, 255, 255, .06);
+            overflow: hidden;
+            flex: 0 0 auto;
+            box-shadow: 0 22px 60px rgba(0, 0, 0, .45);
+            position: relative;
+        }
+
+        .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .appearance-badge{
+            position:absolute;
+            top:10px;
+            left:10px;
+            background: rgba(56,189,248,.95);
+            color:#061428;
+            font-weight:900;
+            border-radius: 999px;
+            padding: .25rem .55rem;
+            font-size:.85rem;
+            box-shadow: 0 10px 24px rgba(56,189,248,.35);
+        }
+
+        .meta .name {
+            font-weight: 950;
+            font-size: 2.05rem;
+            margin: 0;
+            line-height: 1.08;
+        }
+
+        .meta .sub {
+            display: none; /* hide dash line */
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .chip2 {
+            display: inline-flex;
+            align-items: center;
+            padding: .26rem .62rem;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, .16);
+            background: rgba(255, 255, 255, .06);
+            color: rgba(243, 247, 255, .92);
+            font-weight: 800;
+            font-size: .82rem;
+        }
+
+        .bidBox {
+            margin-top: 14px;
+            border: 1px solid rgba(255, 255, 255, .14);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, .04);
+            padding: 14px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .bidAmt {
+            font-weight: 950;
+            font-size: 2rem;
+            letter-spacing: .3px;
+        }
+
+        .bidTeam {
+            color: var(--muted);
+            font-weight: 800;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .btn-soft {
+            border: 1px solid rgba(255, 255, 255, .18);
+            background: rgba(255, 255, 255, .06);
+            color: rgba(243, 247, 255, .92);
+            font-weight: 900;
+            border-radius: 14px;
+            padding: .65rem 1rem;
+        }
+
+        .btn-soft:hover {
+            background: rgba(255, 255, 255, .09);
+        }
+
+        .btn-danger-soft {
+            border: 1px solid rgba(248, 113, 113, .38);
+            background: rgba(248, 113, 113, .14);
+            color: #ffd0d0;
+        }
+
+        .btn-danger-soft:hover {
+            background: rgba(248, 113, 113, .18);
+        }
+
+        .btn-success-soft {
+            border: 1px solid rgba(34, 197, 94, .38);
+            background: rgba(34, 197, 94, .14);
+            color: #b9f6c6;
+        }
+
+        .btn-success-soft:hover {
+            background: rgba(34, 197, 94, .18);
+        }
+
+        .teamsHeader {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .teamList {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .teamRow {
+            border: 1px solid rgba(255, 255, 255, .14);
+            background: rgba(255, 255, 255, .04);
+            border-radius: 16px;
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .teamLeft {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .logo {
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, .18);
+            background: rgba(255, 255, 255, .06);
+            overflow: hidden;
+            flex: 0 0 auto;
+        }
+
+        .logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .teamName {
+            font-weight: 950;
+            margin: 0;
+            font-size: 1rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 240px;
+        }
+
+        .teamPurse {
+            color: var(--muted);
+            font-weight: 800;
+            font-size: .88rem;
+        }
+
+        .teamBtns {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .btn-bid {
+            border: 0;
+            border-radius: 14px;
+            padding: .55rem .8rem;
+            font-weight: 950;
+            color: #071021;
+            background: linear-gradient(90deg, var(--accent1), var(--accent2));
+            box-shadow: 0 12px 24px rgba(56, 189, 248, .12);
+        }
+
+        .btn-bid:active {
+            transform: translateY(1px);
+        }
+
+        .btn-bid2 {
+            border: 1px solid rgba(255, 255, 255, .18);
+            border-radius: 14px;
+            padding: .55rem .8rem;
+            font-weight: 950;
+            color: rgba(243, 247, 255, .92);
+            background: rgba(255, 255, 255, .06);
+        }
+
+        .toastBid {
+            position: fixed;
+            right: 18px;
+            bottom: 18px;
+            padding: 12px 14px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, .16);
+            background: rgba(12, 18, 34, .78);
+            box-shadow: 0 18px 60px rgba(0, 0, 0, .55);
+            backdrop-filter: blur(10px);
+            color: rgba(243, 247, 255, .92);
+            font-weight: 900;
+            transform: translateY(12px);
+            opacity: 0;
+            pointer-events: none;
+            transition: all .18s ease;
+            max-width: 360px;
+        }
+
+        .toastBid.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .teamRow.active-bid {
+            border-color: rgba(34, 197, 94, .55);
+            background: linear-gradient(180deg, rgba(34, 197, 94, .18), rgba(34, 197, 94, .10));
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, .18);
+        }
+
+        .teamRow.dimmed {
+            opacity: .55;
+            filter: grayscale(.2);
+        }
+
+        .bidBtn[disabled] {
+            opacity: .45;
+            cursor: not-allowed;
+            filter: grayscale(.4);
+        }
+
+        .history {
+            margin-top: 14px;
+            border: 1px solid rgba(255, 255, 255, .14);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, .04);
+            overflow: hidden;
+        }
+
+        .historyHead {
+            padding: 12px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(255, 255, 255, .12);
+            background: rgba(255, 255, 255, .04);
+        }
+
+        .historyList {
+            max-height: 320px;
+            overflow: auto;
+        }
+
+        .historyItem {
+            padding: 10px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, .10);
+        }
+
+        .historyItem:last-child {
+            border-bottom: 0;
+        }
+
+        .hTeam {
+            font-weight: 950;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 190px;
+        }
+
+        .hMeta {
+            color: var(--muted);
+            font-weight: 800;
+            font-size: .85rem;
+        }
+
+        .hAmt {
+            font-weight: 950;
+            font-size: .98rem;
+            text-align: right;
+        }
+
+        .historyItem.top {
+            background: linear-gradient(90deg, rgba(34, 197, 94, .18), rgba(56, 189, 248, .10));
+            border-bottom-color: rgba(34, 197, 94, .22);
+        }
+
+        .smallBtn {
+            border: 1px solid rgba(255, 255, 255, .16);
+            background: rgba(255, 255, 255, .06);
+            color: rgba(243, 247, 255, .92);
+            font-weight: 900;
+            border-radius: 12px;
+            padding: .35rem .6rem;
+            font-size: .85rem;
+        }
+
+        .smallBtn:hover {
+            background: rgba(255, 255, 255, .09);
+        }
+
+        .sold-ribbon{
+              position:absolute;
+              top: 18px;
+              right: -60px;
+              width: 220px;
+              text-align:center;
+              background: linear-gradient(90deg, #16a34a, #22c55e);
+              color: #04210f;
+              font-weight: 950;
+              font-size: 1.15rem;
+              letter-spacing: 2px;
+              padding: 10px 0;
+              transform: rotate(45deg) translateY(-140px);
+              box-shadow: 0 18px 40px rgba(34,197,94,.45);
+              opacity: 0;
+              pointer-events: none;
+              z-index: 50;
+            }
+
+            .sold-ribbon.show{
+              animation: soldDrop .9s ease-out forwards;
+            }
+
+            @keyframes soldDrop{
+              0%{
+                opacity: 0;
+                transform: rotate(45deg) translateY(-180px);
+              }
+              40%{
+                opacity: 1;
+                transform: rotate(45deg) translateY(0);
+              }
+              100%{
+                opacity: 1;
+                transform: rotate(45deg) translateY(0);
+              }
+            }
+
+        .statsPanel{
+  margin-top: 12px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 18px;
+  background: rgba(255,255,255,.04);
+  padding: 12px;
+}
+
+        .statsRow{
+          display:grid;
+          grid-template-columns: 1fr 1.4fr 1.4fr;
+          gap: 12px;
+        }
+
+        @media (max-width: 1100px){
+          .statsRow{ grid-template-columns: 1fr; } /* only stacks on small screens */
+        }
+        .statsTitle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .statsTitle h6 {
+            margin: 0;
+            font-weight: 950;
+        }
+
+        .statsGrid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 12px;
+        }
+
+        @media (max-width: 1200px){
+          .statsGrid{ grid-template-columns: 1fr; }
+        }
+
+        .statCard {
+            border: 1px solid rgba(255, 255, 255, .12);
+            background: rgba(255, 255, 255, .04);
+            border-radius: 16px;
+            padding: 12px;
+        }
+
+        .statLabel {
+            color: var(--muted);
+            font-weight: 850;
+            font-size: .90rem;
+        }
+
+        .statValue {
+            font-weight: 950;
+            font-size: 1.15rem;
+            margin-top: 4px;
+        }
+
+        .statSub {
+            color: rgba(243, 247, 255, .78);
+            font-weight: 750;
+            font-size: .92rem;
+            margin-top: 4px;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+{#    <div class="topbar">#}
+{#        <div>#}
+{#            <div class="muted" style="font-weight:700;">{{ tournament.name }}</div>#}
+{#            <h2 class="title">Auction Screen</h2>#}
+{#        </div>#}
+{#        <div class="d-flex flex-wrap gap-2 align-items-center">#}
+{#            <span class="live-pill"><span class="dot"></span> LIVE UI</span>#}
+{#            <a class="btn btn-outline-light" href="/t/{{ tournament.slug }}/">Back</a>#}
+{#            <a class="btn btn-outline-light" href="/admin/">Admin</a>#}
+{#        </div>#}
+{#    </div>#}
+
+    {% if not auction %}
+        <div class="panel">
+            <h4 style="font-weight:950;">No Auction found for this tournament</h4>
+            <div class="muted">Go back to the tournament and click <strong>Generate Lots</strong> to create the auction and lots.</div>
+            <div class="mt-2">
+              <a class="btn btn-accent" href="{% url 'tournament_detail' slug=tournament.slug %}">Back to Tournament</a>
+            </div>
+        </div>
+    {% else %}
+
+        <div class="screen">
+            <!-- LEFT: Current lot / player -->
+            <div class="panel">
+                <div class="sold-ribbon" id="soldRibbon">
+                    SOLD
+                </div>
+{#                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">#}
+{#                    <div>#}
+{#                        <div class="chip">Auction Code: <strong class="ms-1">{{ auction.code }}</strong></div>#}
+{#                    </div>#}
+{#                    <div class="chip">Status: <strong class="ms-1">{{ auction.get_status_display }}</strong></div>#}
+{#                </div>#}
+
+{#                <div class="divider"></div>#}
+
+                {% if not current_lot %}
+                    <h4 style="font-weight:950;">No Lots yet</h4>
+                    <div class="muted mb-3">
+                        This screen needs auction lots (AuctionLot). Next step we’ll add a “Generate lots” action or
+                        button.
+                    </div>
+                    <a class="btn btn-accent" href="{% url 'tournament_detail' slug=tournament.slug %}">Back to Tournament</a>
+                {% else %}
+                    <div id="lotMeta" data-lot-id="{{ current_lot.id }}"></div>
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                        <div class="chip">LOT #<strong class="ms-1" id="lotNo">{{ current_lot.lot_no }}</strong></div>
+                        <div class="chip">Lot Status: <strong class="ms-1"
+                                                              id="lotStatus">{{ current_lot.get_status_display }}</strong>
+                        </div>
+                    </div>
+                    <div class="playerCard">
+                        <div class="avatar">
+                            {% if appearance_no %}
+                                <div class="appearance-badge" id="appearanceBadge">#{{ appearance_no }}</div>
+                            {% else %}
+                                <div class="appearance-badge" id="appearanceBadge" style="display:none;">#--</div>
+                            {% endif %}
+                            {% if current_lot.player.photo %}
+                                <img id="pPhoto" src="{{ current_lot.player.photo.url }}" alt="{{ current_lot.player.name }}">
+                            {% else %}
+                                <img id="pPhoto" src="{% static 'img/player-placeholder.png' %}" alt="Player">
+                            {% endif %}
+                        </div>
+
+                        <div class="meta flex-grow-1">
+                            <p class="name" id="pName">{{ current_lot.player.name }}</p>
+                            <div class="sub" id="pSub">
+                                {% if current_lot.player.city %}{{ current_lot.player.city }}{% else %}—{% endif %}
+                                {% if current_lot.player.age %} • {{ current_lot.player.age }} yrs{% endif %}
+                            </div>
+
+                            <div class="chips">
+  <span class="chip2" id="pRoleChip">
+    {% if current_lot.player.role %}{{ current_lot.player.get_role_display }}{% else %}Role: —{% endif %}
+  </span>
+
+                                <span class="chip2" id="pBaseChip">
+    Base: <strong class="ms-1">{{ current_lot.base_price_snapshot|inr }}</strong>
+  </span>
+
+                                <span class="chip2" id="pReserveChip"
+                                      style="{% if not current_lot.player.reserve_price %}display:none{% endif %}">
+    Reserve: <strong class="ms-1" id="pReserveVal">{{ current_lot.player.reserve_price|inr }}</strong>
+  </span>
+                            </div>
+                        </div>
+
+                        <div class="text-end">
+                            <div class="muted" style="font-weight:800;">Current Bid</div>
+                            <div class="bidAmt" id="bidAmt">₹ {{ current_lot.base_price_snapshot|inr }}</div>
+                            <div class="bidTeam" id="bidTeam">No bids yet</div>
+
+                            {% if bid_timer_seconds > 0 %}
+                                <div class="chips" style="justify-content:flex-end; margin-top:10px;">
+                                    <span class="chip2" id="bidTimerWrap" data-timer-seconds="{{ bid_timer_seconds }}">
+                                        Timer: <strong class="ms-1" id="bidTimerVal">--:--</strong>
+                                    </span>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="statsPanel" id="statsPanel">
+                        <div class="statsRow">
+                            <!-- Matches -->
+                            <div class="statCard">
+                                <div class="statLabel">Matches</div>
+                                <div class="statValue" id="sMatches">
+                                    {{ current_lot.player.stats.matches|default:"—" }}
+                                </div>
+                            </div>
+
+                            <!-- Batting -->
+                            <div class="statCard">
+                                <div class="statLabel">Batting</div>
+                                <div class="statValue" id="sBatMain">
+                                    Runs: {{ current_lot.player.stats.runs|default:"—" }}
+                                </div>
+                                <div class="statSub" id="sBatSub">
+                                    Avg: {{ current_lot.player.stats.bat_avg|default:"—" }} /
+                                    SR: {{ current_lot.player.stats.bat_sr|default:"—" }}
+                                </div>
+                            </div>
+
+                            <!-- Bowling -->
+                            <div class="statCard">
+                                <div class="statLabel">Bowling</div>
+                                <div class="statValue" id="sBowlMain">
+                                    Wickets: {{ current_lot.player.stats.wickets|default:"—" }}
+                                </div>
+                                <div class="statSub" id="sBowlSub">
+                                    Overs: {{ current_lot.player.stats.overs|default:"—" }} •
+                                    Eco: {{ current_lot.player.stats.eco|default:"—" }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="statsPanel" id="highestSoldPanel">
+                        <div class="statLabel">Highest Sold (so far)</div>
+                        <div class="statValue" id="highestSoldPrice">
+                            {% if highest_sold %}
+                                ₹ {{ highest_sold.price|inr }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </div>
+                        <div class="statSub" id="highestSoldMeta">
+                            {% if highest_sold %}
+                                {{ highest_sold.player }}{% if highest_sold.team %} • {{ highest_sold.team }}{% endif %}
+                            {% else %}
+                                No sales yet
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="bidBox">
+{#                        <div>#}
+{#                            <div class="muted" style="font-weight:800;">Quick controls (UI only)</div>#}
+{#                            <div class="muted" style="font-size:.9rem;">Next we’ll connect these buttons to DB + live#}
+{#                                updates.#}
+{#                            </div>#}
+{#                        </div>#}
+
+                        <div class="controls">
+                            <button class="btn btn-soft" id="undoBid">Undo Last Bid</button>
+                            <button class="btn btn-soft btn-success-soft" id="markSold">Mark SOLD</button>
+                            <button class="btn btn-soft btn-danger-soft" id="markUnsold">Mark UNSOLD</button>
+                            <button class="btn btn-soft" id="nextLot">Next Lot</button>
+                            <button class="btn btn-soft" id="startUnsoldRound">Start Unsold</button>
+                        </div>
+                    </div>
+                {% endif %}
+        </div>
+
+        <!-- RIGHT: Teams / bidding panel -->
+        <div class="panel">
+            <div class="teamsHeader">
+                <div>
+                    <h5 class="mb-1" style="font-weight:950;">Teams Panel</h5>
+                    <div class="muted" style="font-size:.9rem;">Tap bid buttons to simulate bidding.</div>
+                </div>
+                <span class="chip">{{ teams|length }} teams</span>
+            </div>
+
+            <div class="teamList">
+                {% for team in teams %}
+                    <div class="teamRow" data-team-id="{{ team.id }}" data-purse="{{ team.purse_remaining|default:0 }}" data-total="{{ team.purse_total|default:0 }}">
+                        <div class="teamLeft">
+                            <div class="logo">
+                                {% if team.logo %}
+                                    <img src="{{ team.logo.url }}" alt="{{ team.name }}">
+                                {% else %}
+                                    <div class="muted"
+                                         style="font-weight:900;display:flex;align-items:center;justify-content:center;height:100%;">
+                                        {{ team.short_name|default:"SS" }}
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="min-w-0">
+                                <p class="teamName">{{ team.name }}</p>
+                                <div class="teamPurse">Purse: {{ team.purse_remaining|inr }}
+                                    / {{ team.purse_total|inr }}</div>
+                            </div>
+                        </div>
+
+                        <div class="teamBtns">
+                            <button class="btn-bid2 bidBtn" data-team-id="{{ team.id }}">BID</button>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+
+            <div class="history">
+                <div class="historyHead">
+                    <div>
+                        <div style="font-weight:950;">Bid History</div>
+                        <div class="muted" style="font-size:.85rem;">Top 20 bids (this lot)</div>
+                    </div>
+                    <button class="smallBtn" id="refreshBids">Refresh</button>
+                </div>
+
+                <div class="historyList" id="historyList">
+                    <div class="historyItem">
+                        <div class="muted">No bids yet…</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        </div>
+
+        <div class="toastBid" id="toastBid"></div>
+
+    {% endif %}
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        }
+
+        function formatINR(num) {
+            return "₹ " + Number(num).toLocaleString("en-IN");
+        }
+
+
+        (function () {
+            const bidAmtEl = document.getElementById("bidAmt");
+            const bidTeamEl = document.getElementById("bidTeam");
+            const toast = document.getElementById("toastBid");
+            const lotMeta = document.getElementById("lotMeta");
+            document.getElementById("refreshBids")?.addEventListener("click", refreshBidHistory);
+
+            if (!bidAmtEl || !lotMeta) return;
+
+            const getLotId = () => lotMeta.dataset.lotId;
+
+            // ---- Base price & current bid state ----
+            let basePrice = Number(
+                bidAmtEl.textContent.replace(/[^\d]/g, "")
+            ) || 0;
+
+            // At auction start, NO bids yet
+            let currentBid = 0;
+
+            // ---- Bid timer (front-end only) ----
+            const bidTimerWrap = document.getElementById("bidTimerWrap");
+            const bidTimerVal = document.getElementById("bidTimerVal");
+            const bidTimerSeconds = Number(bidTimerWrap?.dataset.timerSeconds || 0) || 0;
+
+            let bidTimerInterval = null;
+            let bidTimerRemaining = bidTimerSeconds;
+
+            function formatMMSS(totalSeconds) {
+                const s = Math.max(0, Number(totalSeconds) || 0);
+                const mm = String(Math.floor(s / 60)).padStart(2, "0");
+                const ss = String(s % 60).padStart(2, "0");
+                return `${mm}:${ss}`;
+            }
+
+            function setBidTimerDisplay(seconds) {
+                if (!bidTimerVal) return;
+                bidTimerVal.textContent = formatMMSS(seconds);
+            }
+
+            function stopBidTimer() {
+                if (bidTimerInterval) {
+                    clearInterval(bidTimerInterval);
+                    bidTimerInterval = null;
+                }
+            }
+
+            function resetBidTimer() {
+                if (bidTimerSeconds <= 0) return;
+                stopBidTimer();
+                bidTimerRemaining = bidTimerSeconds;
+                setBidTimerDisplay(bidTimerRemaining);
+            }
+
+            function startBidTimer() {
+                if (bidTimerSeconds <= 0) return;
+                stopBidTimer();
+                bidTimerRemaining = bidTimerSeconds;
+                setBidTimerDisplay(bidTimerRemaining);
+
+                bidTimerInterval = setInterval(() => {
+                    bidTimerRemaining -= 1;
+                    if (bidTimerRemaining <= 0) {
+                        bidTimerRemaining = 0;
+                        setBidTimerDisplay(bidTimerRemaining);
+                        stopBidTimer();
+                        return;
+                    }
+                    setBidTimerDisplay(bidTimerRemaining);
+                }, 1000);
+            }
+
+            // Initialize timer display if enabled
+            resetBidTimer();
+
+            function showToast(msg, isErr = false) {
+                toast.textContent = msg;
+                toast.style.borderColor = isErr ? "rgba(248,113,113,.35)" : "rgba(255,255,255,.16)";
+                toast.classList.add("show");
+                setTimeout(() => toast.classList.remove("show"), 1200);
+            }
+
+            async function postJSON(url, data) {
+                const res = await fetch(url, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": getCookie("csrftoken"),
+                    },
+                    body: JSON.stringify(data || {}),
+                });
+                const out = await res.json().catch(() => ({}));
+                if (!res.ok || out.ok === false) {
+                    throw new Error(out.error || "Request failed");
+                }
+                return out;
+            }
+
+            function roleLabel(roleCode) {
+                return ({
+                    "BAT": "Batsman",
+                    "BOWL": "Bowler",
+                    "AR": "All-Rounder",
+                    "WK": "Wicket-Keeper"
+                })[roleCode] || "Role: —";
+            }
+
+            function updateHighestSoldDisplay(hs) {
+                const priceEl = document.getElementById("highestSoldPrice");
+                const metaEl = document.getElementById("highestSoldMeta");
+                if (!priceEl || !metaEl) return;
+
+                if (!hs) {
+                    priceEl.textContent = "—";
+                    metaEl.textContent = "No sales yet";
+                    return;
+                }
+
+                priceEl.textContent = formatINR(hs.price);
+                metaEl.textContent = hs.player + (hs.team ? ` • ${hs.team}` : "");
+            }
+
+            async function loadNextLot() {
+                stopBidTimer();
+
+                const out = await postJSON(`/auction/${getLotId()}/next/`, {});   // uses wrap-around logic now
+                const n = out.next;
+                basePrice = Number(n.player.base || 0);
+                renderStats(n.player.stats || {});
+                updateBidButtons();
+
+                // Update lot id (so future bids go to new lot)
+                lotMeta.dataset.lotId = n.lot_id;
+
+                // Update top chips
+                document.getElementById("lotNo").textContent = n.lot_no;
+                document.getElementById("lotStatus").textContent = "Pending";
+
+                const appearanceBadge = document.getElementById("appearanceBadge");
+                if (appearanceBadge) {
+                    appearanceBadge.textContent = `#${n.appearance_no || "--"}`;
+                    appearanceBadge.style.display = "";
+                }
+
+                // Update player card
+                document.getElementById("pName").textContent = n.player.name;
+
+                const sub = [];
+                if (n.player.city) sub.push(n.player.city);
+                if (n.player.age) sub.push(`${n.player.age} yrs`);
+                document.getElementById("pSub").textContent = sub.length ? sub.join(" • ") : "—";
+
+                document.getElementById("pRoleChip").textContent = roleLabel(n.player.role);
+
+                // Base chip + current bid reset display (we treat it as starting point visually)
+                document.getElementById("pBaseChip").innerHTML = `Base: <strong class="ms-1">${formatINR(n.player.base)}</strong>`;
+
+                // Reserve
+                const resChip = document.getElementById("pReserveChip");
+                const resVal = document.getElementById("pReserveVal");
+                if (Number(n.player.reserve || 0) > 0) {
+                    resChip.style.display = "";
+                    resVal.textContent = formatINR(n.player.reserve);
+                } else {
+                    resChip.style.display = "none";
+                }
+
+                // Photo
+                const pPhoto = document.getElementById("pPhoto");
+                pPhoto.src = n.player.photo ? n.player.photo : "{% static 'img/player-placeholder.png' %}";
+
+                // Reset bid display
+                bidAmtEl.textContent = formatINR(n.player.base);    // show base as starting reference
+                bidTeamEl.textContent = "No bids yet";
+
+                // Reset timer UI for the new lot
+                resetBidTimer();
+
+                // Clear team highlight + enable bidding again
+                document.querySelectorAll(".teamRow").forEach(row => row.classList.remove("active-bid", "dimmed"));
+                document.querySelectorAll(".bidBtn").forEach(b => b.disabled = false);
+
+                // IMPORTANT: keep next-bid UX in sync if you’re using currentBid/basePrice logic
+                // If you are using currentBid=0 model, set it here accordingly:
+                if (typeof currentBid !== "undefined") {
+                    currentBid = 0; // start fresh (no bids yet)
+                }
+                if (typeof basePrice !== "undefined") {
+                    // if you have basePrice variable in your script, update it
+                    // basePrice = Number(n.player.base); // only if basePrice is declared with let, not const
+                }
+                if (typeof updateBidButtons === "function") {
+                    updateBidButtons();
+                }
+
+                // refresh history panel
+                if (typeof refreshBidHistory === "function") {
+                    refreshBidHistory();
+                }
+
+                showToast(`Next lot loaded: #${n.lot_no}`);
+            }
+
+            async function getJSON(url) {
+                const res = await fetch(url, {method: "GET"});
+                const out = await res.json().catch(() => ({}));
+                if (!res.ok || out.ok === false) {
+                    throw new Error(out.error || "Request failed");
+                }
+                return out;
+            }
+
+            function renderBids(bids) {
+                const list = document.getElementById("historyList");
+                if (!list) return;
+
+                if (!bids || bids.length === 0) {
+                    list.innerHTML = `<div class="historyItem"><div class="muted">No bids yet…</div></div>`;
+                    return;
+                }
+
+                list.innerHTML = bids.map((b, idx) => {
+                    const cls = idx === 0 ? "historyItem top" : "historyItem";
+                    return `
+                  <div class="${cls}">
+                    <div>
+                      <div class="hTeam">${b.team.name}</div>
+                      <div class="hMeta">${b.time}</div>
+                    </div>
+                    <div class="hAmt">${formatINR(b.amount)}</div>
+                  </div>
+                `;
+                }).join("");
+            }
+
+            async function refreshBidHistory() {
+                try {
+                    const out = await getJSON(`/auction/${getLotId()}/bids/`);
+                    renderBids(out.bids || []);
+                } catch (e) {
+                    // silent-ish failure
+                }
+            }
+
+            // ---- Update BID buttons based on rules ----
+            function updateBidButtons() {
+                const next = getNextBid(currentBid, basePrice);
+
+                document.querySelectorAll(".teamRow").forEach(row => {
+                    const purse = Number(row.dataset.purse || 0);
+                    const btn = row.querySelector(".bidBtn");
+
+                    if (!btn) return;
+
+                    // Update button label
+                    btn.innerHTML = `
+                      <div style="line-height:1.05;text-align:center;">
+                        <div style="font-size:.75rem;opacity:.85">${next.label}</div>
+                        <div style="font-size:.95rem;font-weight:900">
+                          ${formatINR(next.amount)}
+                        </div>
+                      </div>
+                    `;
+
+                    // Disable if purse insufficient
+                    if (purse < next.amount) {
+                      btn.disabled = true;
+                      btn.title = "Insufficient purse";
+                      row.classList.add("dimmed");
+                    } else {
+                      btn.disabled = false;
+                      btn.title = "";
+                      row.classList.remove("dimmed");
+                    }
+                });
+            }
+
+
+            updateBidButtons();
+            refreshBidHistory();
+
+            // Place bid
+            document.querySelectorAll(".bidBtn").forEach(btn => {
+                btn.addEventListener("click", async () => {
+                    const teamId = btn.dataset.teamId;
+                    const teamName = btn.dataset.teamName;
+
+                    try {
+                        const out = await postJSON(`/auction/${getLotId()}/bid/`, {team_id: Number(teamId)});
+
+                        bidAmtEl.textContent = "₹ " + Number(out.amount).toLocaleString("en-IN");
+                        bidTeamEl.textContent = `Highest: ${out.team.name}`;
+
+                        currentBid = Number(out.amount);
+                        updateBidButtons();
+                        refreshBidHistory();
+                        startBidTimer();
+
+                        // Highlight current highest team
+                        document.querySelectorAll(".teamRow").forEach(row => {
+                            if (row.dataset.teamId === String(out.team.id)) {
+                                row.classList.add("active-bid");
+                                row.classList.remove("dimmed");
+                            } else {
+                                row.classList.remove("active-bid");
+                                row.classList.add("dimmed");
+                            }
+                        });
+                        bidAmtEl.animate(
+                            [{transform: "translateY(0)", filter: "brightness(1)"},
+                                {transform: "translateY(-2px)", filter: "brightness(1.15)"},
+                                {transform: "translateY(0)", filter: "brightness(1)"}],
+                            {duration: 160, easing: "ease-out"}
+                        );
+
+                        showToast(
+                            `${out.team.name} bid ₹ ${Number(out.amount).toLocaleString("en-IN")}`
+                        );
+                    } catch (e) {
+                        showToast(e.message || `Bid failed for ${teamName}`, true);
+                    }
+                });
+            });
+
+            // Mark SOLD
+            document.getElementById("markSold")?.addEventListener("click", async () => {
+                try {
+                    stopBidTimer();
+                    const out = await postJSON(`/auction/${getLotId()}/mark_sold/`, {});
+                    showToast(
+                        `SOLD to ${out.sold_to.name} for ₹ ${Number(out.sold_price).toLocaleString("en-IN")}`
+                    );
+                    const ribbon = document.getElementById("soldRibbon");
+                    if(ribbon){
+                      ribbon.classList.add("show");
+                      setTimeout(() => ribbon.classList.remove("show"), 1000);
+                    }
+
+                    // Deduct purse in UI for sold team
+                    const soldTeamId = out.sold_to.id;
+                    const soldPrice = Number(out.sold_price);
+
+                    const soldRow = document.querySelector(`.teamRow[data-team-id="${soldTeamId}"]`);
+                    if(soldRow){
+                      const oldPurse = Number(soldRow.dataset.purse || 0);
+                      const newPurse = Math.max(0, oldPurse - soldPrice);
+
+                      soldRow.dataset.purse = newPurse;
+
+                      // Update purse text
+                      const purseEl = soldRow.querySelector(".teamPurse");
+                      if(purseEl){
+                        purseEl.textContent =
+                          `Purse: ${formatINR(newPurse)} / ${formatINR(
+                            soldRow.dataset.total || 0
+                          )}`;
+                      }
+                    }
+                    updateBidButtons();
+
+                    if (out.highest_sold) {
+                        updateHighestSoldDisplay(out.highest_sold);
+                    }
+
+                    document.querySelectorAll(".bidBtn").forEach(b => b.disabled = true);
+                    setTimeout(() => {
+                      loadNextLot().catch(e => showToast(e.message || "No pending lots remaining", true));
+                    }, 500);
+                    refreshBidHistory();
+                } catch (e) {
+                    showToast(e.message || "Mark SOLD failed", true);
+                }
+
+            });
+
+
+            // Mark UNSOLD
+            document.getElementById("markUnsold")?.addEventListener("click", async () => {
+                try {
+                    stopBidTimer();
+                    const out = await postJSON(`/auction/${getLotId()}/mark_unsold/`, {});
+                    showToast("Marked UNSOLD");
+                    document.querySelectorAll(".bidBtn").forEach(b => b.disabled = true);
+                    setTimeout(() => {
+                      loadNextLot().catch(e => showToast(e.message || "No pending lots remaining", true));
+                    }, 700);
+                    refreshBidHistory();
+                } catch (e) {
+                    showToast(e.message || "Mark UNSOLD failed", true);
+                }
+            });
+
+            // Next lot (simple: call endpoint then reload screen)
+            document.getElementById("nextLot")?.addEventListener("click", async () => {
+  try{
+    await loadNextLot();
+  }catch(e){
+    showToast(e.message || "No next lot", true);
+  }
+});
+
+            document.querySelectorAll(".teamRow").forEach(row => {
+                row.classList.remove("active-bid", "dimmed");
+            });
+
+            document.getElementById("undoBid")?.addEventListener("click", async () => {
+                try {
+                    const out = await postJSON(`/auction/${getLotId()}/undo_last_bid/`, {});
+
+                    // Update current bid display
+                    const newAmt = Number(out.new.amount || 0);
+                    bidAmtEl.textContent = formatINR(newAmt);
+
+                    // Update highest team text and highlight
+                    if (out.new.team) {
+                        bidTeamEl.textContent = `Highest: ${out.new.team.name}`;
+
+                        document.querySelectorAll(".teamRow").forEach(row => {
+                            if (row.dataset.teamId === String(out.new.team.id)) {
+                                row.classList.add("active-bid");
+                                row.classList.remove("dimmed");
+                            } else {
+                                row.classList.remove("active-bid");
+                                row.classList.add("dimmed");
+                            }
+                        });
+                    } else {
+                        bidTeamEl.textContent = "No bids yet";
+
+                        // Clear highlight if no team
+                        document.querySelectorAll(".teamRow").forEach(row => {
+                            row.classList.remove("active-bid", "dimmed");
+                        });
+                    }
+
+                    // If you implemented currentBid/basePrice logic:
+                    // Keep currentBid in sync so Next Bid UX updates correctly
+                    currentBid = newAmt;
+                    updateBidButtons?.();
+
+                    // Refresh bid history panel
+                    refreshBidHistory?.();
+
+                    if (out.new.team) {
+                        startBidTimer();
+                    } else {
+                        resetBidTimer();
+                    }
+
+                    showToast("Last bid undone ✅");
+                } catch (e) {
+                    showToast(e.message || "Undo failed", true);
+                }
+            });
+
+            document.getElementById("startUnsoldRound")?.addEventListener("click", async () => {
+                try {
+                    const out = await postJSON(`/auction/{{ auction.id }}/reopen_unsold/`, {});
+                    if (out.reopened > 0) {
+                        showToast(`Unsold round started: ${out.reopened} players relisted ✅`);
+                        // Load next lot immediately (now PENDING exists again)
+                        setTimeout(() => {
+                            loadNextLot().catch(e => showToast(e.message || "No pending lots", true));
+                        }, 600);
+                    } else {
+                        showToast("No unsold players to relist.", true);
+                    }
+                } catch (e) {
+                    showToast(e.message || "Failed to start unsold round", true);
+                }
+            });
+
+        })();
+
+        function getNextBid(current, basePrice) {
+            current = Number(current);
+            basePrice = Number(basePrice) || 0;
+
+            // FIRST BID → base price
+            if (current === 0) {
+                return {amount: basePrice, label: "BASE"};
+            }
+
+            // Rules
+            if (current < 100000) {
+                return {amount: current + 10000, label: "+10k"};
+            }
+            if (current >= 100000 && current < 400000) {
+                return {amount: current + 20000, label: "+20k"};
+            }
+            if (current >= 400000 && current < 500000) {
+                return {amount: 500000, label: "JUMP 5L"};
+            }
+            return {amount: current + 20000, label: "+20k"};
+        }
+
+        function safeVal(v) {
+            if (v === null || v === undefined) return "—";
+            if (String(v).trim() === "") return "—";
+            return v;
+        }
+
+        function renderStats(stats) {
+            stats = stats || {};
+
+            document.getElementById("sMatches").textContent = safeVal(stats.matches);
+
+            document.getElementById("sBatMain").textContent =
+                `Runs: ${safeVal(stats.runs)}`;
+            document.getElementById("sBatSub").textContent =
+                `Avg: ${safeVal(stats.bat_avg)} / SR: ${safeVal(stats.bat_sr)}`;
+
+            document.getElementById("sBowlMain").textContent =
+                `Wickets: ${safeVal(stats.wickets)}`;
+            document.getElementById("sBowlSub").textContent =
+                `Overs: ${safeVal(stats.overs)} • Eco: ${safeVal(stats.eco)}`;
+        }
+
+    </script>
+
+{% endblock %}

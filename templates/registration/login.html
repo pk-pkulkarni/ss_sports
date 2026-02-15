@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Login | SS Cricket{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-7 col-lg-5">
+    <div class="card-glass p-4">
+      <h2 class="mb-1" style="font-weight:900;">Login</h2>
+      <div class="muted mb-3">Sign in to manage your tournaments.</div>
+
+      {% if form.errors %}
+        <div class="alert alert-danger">
+          Invalid username or password.
+        </div>
+      {% endif %}
+
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+
+        <div class="mb-3">
+          <label class="form-label">Username</label>
+          {{ form.username.as_widget|safe }}
+          <script>
+            (function(){
+              const el = document.getElementById("id_username");
+              if(el){ el.className = (el.className + " form-control").trim(); el.autofocus = true; }
+            })();
+          </script>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Password</label>
+          {{ form.password.as_widget|safe }}
+          <script>
+            (function(){
+              const el = document.getElementById("id_password");
+              if(el){ el.className = (el.className + " form-control").trim(); }
+            })();
+          </script>
+        </div>
+
+        <button type="submit" class="btn btn-accent w-100">Sign in</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

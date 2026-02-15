@@ -1,0 +1,877 @@
+{% extends "base.html" %}
+{% load static inr %}
+{% block title %}{{ tournament.name }} | SS Cricket{% endblock %}
+
+{% block head %}
+    <style>
+        .hero {
+            padding: 18px;
+            border-radius: 22px;
+            border: 1px solid rgba(255, 255, 255, .16);
+            background: radial-gradient(900px 400px at 10% 20%, rgba(34, 197, 94, .18), transparent 60%),
+            radial-gradient(900px 400px at 80% 10%, rgba(56, 189, 248, .18), transparent 60%),
+            rgba(255, 255, 255, .04);
+            box-shadow: 0 18px 60px rgba(0, 0, 0, .40);
+        }
+
+        .kpi {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .kpi .chip {
+            background: rgba(255, 255, 255, .07);
+        }
+
+        .team-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 14px;
+        }
+
+        .team-card {
+            grid-column: span 12;
+            padding: 14px;
+        }
+
+        @media (min-width: 992px) {
+            .team-card {
+                grid-column: span 4;
+            }
+        }
+
+        .logo {
+            width: 54px;
+            height: 54px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, .18);
+            background: rgba(255, 255, 255, .06);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .meter {
+            height: 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, .10);
+            border: 1px solid rgba(255, 255, 255, .12);
+            overflow: hidden;
+        }
+
+        .meter > span {
+            display: block;
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--accent1), var(--accent2));
+            box-shadow: 0 10px 22px rgba(56, 189, 248, .18);
+        }
+
+        .filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .control {
+            background: rgba(255, 255, 255, .06);
+            border: 1px solid rgba(255, 255, 255, .16);
+            color: var(--text);
+            border-radius: 14px;
+            padding: .65rem .8rem;
+            outline: none;
+        }
+
+        .control::placeholder {
+            color: rgba(243, 247, 255, .55);
+        }
+
+        .control:focus {
+            border-color: rgba(56, 189, 248, .45);
+            box-shadow: 0 0 0 4px rgba(56, 189, 248, .12);
+        }
+
+        .player-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 14px;
+        }
+
+        .player-card {
+            grid-column: span 12;
+            padding: 14px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        @media (min-width: 576px) {
+            .player-card {
+                grid-column: span 6;
+            }
+        }
+
+        @media (min-width: 992px) {
+            .player-card {
+                grid-column: span 4;
+            }
+        }
+
+        @media (min-width: 1200px) {
+            .player-card {
+                grid-column: span 3;
+            }
+        }
+
+        .player-top {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .avatar {
+            width: 58px;
+            height: 58px;
+            border-radius: 18px;
+            border: 1px solid rgba(255, 255, 255, .18);
+            background: rgba(255, 255, 255, .07);
+            overflow: hidden;
+            flex: 0 0 auto;
+        }
+
+        .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .role-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: .22rem .55rem;
+            border-radius: 999px;
+            font-weight: 800;
+            font-size: .78rem;
+            border: 1px solid rgba(255, 255, 255, .18);
+            background: rgba(255, 255, 255, .06);
+            color: rgba(243, 247, 255, .92);
+            white-space: nowrap;
+        }
+
+        .price {
+            font-weight: 900;
+            letter-spacing: .2px;
+        }
+
+        .glow {
+            position: absolute;
+            inset: -80px -80px auto auto;
+            width: 220px;
+            height: 220px;
+            background: radial-gradient(circle at 30% 30%, rgba(56, 189, 248, .25), transparent 60%);
+            filter: blur(2px);
+            pointer-events: none;
+        }
+
+        .hidden-card {
+            display: none !important;
+        }
+
+        .player-actions {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 5;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+
+    <!-- HERO -->
+    <div class="hero mb-4">
+        <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
+            <div>
+                <div class="muted" style="font-size:.95rem;">
+                    {{ tournament.city|default:"—" }}
+                    {% if tournament.venue %} • {{ tournament.venue }}{% endif %}
+                    {% if tournament.season_year %} • {{ tournament.season_year }}{% endif %}
+                </div>
+                <h1 class="mb-1" style="font-weight:900; letter-spacing:.2px;">{{ tournament.name }}</h1>
+                <div class="kpi">
+                    <span class="chip">Teams: <strong id="teamCount" class="ms-1">{{ total_teams }}</strong></span>
+                    <span class="chip">Players: <strong id="playerCount" class="ms-1">{{ total_players }}</strong></span>
+                    <span class="chip">Active: <strong id="activePlayerCount" class="ms-1">{{ active_players }}</strong></span>
+                    <span class="chip">{{ tournament.get_status_display }}</span>
+                    {% if tournament.auction %}
+                        <span class="chip">Auction Code: <strong
+                                class="ms-1">{{ tournament.auction.code }}</strong></span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 flex-wrap">
+                <a class="btn btn-outline-light" href="{% url 'tournament_list' %}">← Back</a>
+                {% if can_manage %}
+                    <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#teamCreateModal">+ Team</button>
+                    <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#playerCreateModal">+ Player</button>
+{#                    <form method="post" action="{% url 'generate_lots' slug=tournament.slug %}" style="margin:0;">#}
+{#                        {% csrf_token %}#}
+{#                        <button type="submit" class="btn btn-outline-light">Generate Lots</button>#}
+{#                    </form>#}
+                    <form method="post" action="{% url 'generate_random_lots' slug=tournament.slug %}" style="margin:0;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline-light">Generate Random Lots</button>
+                    </form>
+                    <a class="btn btn-outline-light" href="{% url 'lot_manager' slug=tournament.slug %}">Manage Lots</a>
+                {% endif %}
+                <a class="btn btn-accent" href="{% url 'auction_screen' slug=tournament.slug %}">Auction</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- TEAMS -->
+    <div class="card-glass p-4 mb-4">
+        <div class="d-flex flex-wrap align-items-end justify-content-between gap-2">
+            <div>
+                <h3 class="mb-1" style="font-weight:900;">Teams</h3>
+                <div class="muted">Create teams and upload logos to get started.</div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="team-grid" id="teamGrid">
+            {% for team in teams %}
+                {% include "tournaments/partials/team_card.html" with team=team %}
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- PLAYERS -->
+    <div class="card-glass p-4">
+        <div class="filters">
+            <div>
+                <h3 class="mb-1" style="font-weight:900;">Players</h3>
+                <div class="muted">Search + filter instantly (no page refresh).</div>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2">
+                <input id="q" class="control" style="min-width:260px;" placeholder="Search player name…"/>
+                <select id="role" class="control">
+                    <option value="">All roles</option>
+                    <option value="BAT">Batsman</option>
+                    <option value="BOWL">Bowler</option>
+                    <option value="AR">All-Rounder</option>
+                    <option value="WK">Wicket-Keeper</option>
+                </select>
+                <select id="active" class="control">
+                    <option value="">All</option>
+                    <option value="1">Active</option>
+                    <option value="0">Inactive</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div id="playerGrid" class="player-grid">
+            {% for p in players %}
+                {% include "tournaments/partials/player_card.html" with p=p tournament=tournament can_manage=can_manage %}
+            {% endfor %}
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="muted" id="resultCount" style="font-size:.95rem;"></div>
+    </div>
+    {% if can_manage %}
+
+    <!-- Create Team Modal -->
+    <div class="modal fade" id="teamCreateModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content card-glass" style="border:1px solid var(--line);">
+          <div class="modal-header" style="border-bottom:1px solid var(--line);">
+            <h5 class="modal-title">Create Team</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <form method="post" id="teamCreateForm" action="{% url 'team_create' slug=tournament.slug %}" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="modal-body" style="overflow:auto; max-height: 90vh;">
+              <div id="teamCreateErrors" class="alert alert-danger d-none"></div>
+              <div class="row g-3">
+                <div class="col-12">
+                  <label class="form-label">{{ team_form.name.label }}</label>
+                  {{ team_form.name }}
+                </div>
+                <div class="col-12 col-md-4">
+                  <label class="form-label">{{ team_form.short_name.label }}</label>
+                  {{ team_form.short_name }}
+                  <div class="muted" style="font-size:.8rem;">Leave blank to auto-generate.</div>
+                </div>
+                <div class="col-12 col-md-8">
+                  <label class="form-label">{{ team_form.logo.label }}</label>
+                  {{ team_form.logo }}
+                </div>
+                <div class="col-12">
+                  <div class="form-check">
+                    {{ team_form.is_active }}
+                    <label class="form-check-label">Active</label>
+                  </div>
+                </div>
+                <div class="col-12 col-md-6">
+                  <label class="form-label">{{ team_form.purse_total.label }}</label>
+                  {{ team_form.purse_total }}
+                </div>
+                <div class="col-12 col-md-6">
+                  <label class="form-label">{{ team_form.purse_remaining.label }}</label>
+                  {{ team_form.purse_remaining }}
+                </div>
+                <div class="col-12 col-md-6">
+                  <label class="form-label">{{ team_form.min_players.label }}</label>
+                  {{ team_form.min_players }}
+                </div>
+                <div class="col-12 col-md-6">
+                  <label class="form-label">{{ team_form.max_players.label }}</label>
+                  {{ team_form.max_players }}
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer" style="border-top:1px solid var(--line);">
+              <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" class="btn btn-accent">Create Team</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create Player Modal -->
+    <div class="modal fade" id="playerCreateModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content card-glass" style="border:1px solid var(--line);">
+          <div class="modal-header" style="border-bottom:1px solid var(--line);">
+            <h5 class="modal-title">Create Player</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <form method="post" id="playerCreateForm" action="{% url 'player_create' slug=tournament.slug %}" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="modal-body" style="overflow:auto; max-height: 90vh;">
+              <div id="playerCreateErrors" class="alert alert-danger d-none"></div>
+              <div class="row g-3">
+                <div class="col-12">
+                  <label class="form-label">{{ player_form.name.label }}</label>
+                  {{ player_form.name }}
+                </div>
+                <div class="col-12 col-md-8">
+                  <label class="form-label">{{ player_form.photo.label }}</label>
+                  {{ player_form.photo }}
+                </div>
+                <div class="col-12 col-md-4 d-flex align-items-end">
+                  <div class="form-check">
+                    {{ player_form.is_active }}
+                    <label class="form-check-label">Active</label>
+                  </div>
+                </div>
+                <div class="col-12 col-md-6">
+                  <label class="form-label">{{ player_form.phone.label }}</label>
+                  {{ player_form.phone }}
+                </div>
+                <div class="col-12 col-md-6">
+                  <label class="form-label">{{ player_form.city.label }}</label>
+                  {{ player_form.city }}
+                </div>
+                <div class="col-12 col-md-4" style="display: none">
+                  <label class="form-label">{{ player_form.age.label }}</label>
+                  {{ player_form.age }}
+                </div>
+                <div class="col-12 col-md-4" style="display: none">
+                  <label class="form-label">{{ player_form.role.label }}</label>
+                  {{ player_form.role }}
+                </div>
+                <div class="col-12 col-md-6" style="display: none">
+                  <label class="form-label">{{ player_form.batting_style.label }}</label>
+                  {{ player_form.batting_style }}
+                </div>
+                <div class="col-12 col-md-6" style="display: none">
+                  <label class="form-label">{{ player_form.bowling_style.label }}</label>
+                  {{ player_form.bowling_style }}
+                </div>
+                <div class="col-12 col-md-6" style="display: none">
+                  <label class="form-label">{{ player_form.base_price.label }}</label>
+                  {{ player_form.base_price }}
+                </div>
+                <div class="col-12 col-md-6" style="display: none">
+                  <label class="form-label">{{ player_form.reserve_price.label }}</label>
+                  {{ player_form.reserve_price }}
+                </div>
+                <div class="col-12">
+                  <div class="muted" style="font-weight:800;">Stats</div>
+                </div>
+                <div class="col-12 col-md-3">
+                  <label class="form-label">Matches</label>
+                  {{ player_form.matches }}
+                </div>
+                <div class="col-12 col-md-3">
+                  <label class="form-label">Runs</label>
+                  {{ player_form.runs }}
+                </div>
+                <div class="col-12 col-md-3">
+                  <label class="form-label">Wickets</label>
+                  {{ player_form.wickets }}
+                </div>
+                <div class="col-12 col-md-3">
+                  <label class="form-label">Overs</label>
+                  {{ player_form.overs }}
+                </div>
+                <div class="col-12 col-md-3">
+                  <label class="form-label">Eco</label>
+                  {{ player_form.eco }}
+                </div>
+                <div class="col-12 col-md-3">
+                  <label class="form-label">Bat Avg</label>
+                  {{ player_form.bat_avg }}
+                </div>
+                <div class="col-12 col-md-3">
+                  <label class="form-label">Bat SR</label>
+                  {{ player_form.bat_sr }}
+                </div>
+                <div class="col-12" style="display: none">
+                  <label class="form-label">{{ player_form.notes.label }}</label>
+                  {{ player_form.notes }}
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer" style="border-top:1px solid var(--line);">
+              <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" class="btn btn-accent">Create Player</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Player Modal -->
+    <div class="modal fade" id="playerEditModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content card-glass" style="border:1px solid var(--line);">
+          <div class="modal-header" style="border-bottom:1px solid var(--line);">
+            <h5 class="modal-title">Edit Player</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <form method="post" id="playerEditForm" action="{% url 'player_update' slug=tournament.slug %}" enctype="multipart/form-data">
+            {% csrf_token %}
+            <input type="hidden" name="player_id" id="playerEditId" value="">
+            <div class="modal-body" style="overflow: scroll;max-height: 90vh;">
+              <div id="playerEditErrors" class="alert alert-danger d-none"></div>
+              <div class="row g-3">
+                <div class="col-12">
+                  <label class="form-label">{{ player_form.name.label }}</label>
+                  {{ player_form.name }}
+                </div>
+                <div class="col-12 col-md-8">
+                  <label class="form-label">{{ player_form.photo.label }}</label>
+                  {{ player_form.photo }}
+                </div>
+                <div class="col-12 col-md-4 d-flex align-items-end">
+                  <div class="form-check">
+                    {{ player_form.is_active }}
+                    <label class="form-check-label">Active</label>
+                  </div>
+                </div>
+                <div class="col-12 col-md-6">
+                  <label class="form-label">{{ player_form.phone.label }}</label>
+                  {{ player_form.phone }}
+                </div>
+                <div class="col-12 col-md-6">
+                  <label class="form-label">{{ player_form.city.label }}</label>
+                  {{ player_form.city }}
+                </div>
+                <div class="col-12 col-md-4" style="display: none">
+                  <label class="form-label">{{ player_form.age.label }}</label>
+                  {{ player_form.age }}
+                </div>
+                <div class="col-12 col-md-4" style="display: none">
+                  <label class="form-label">{{ player_form.role.label }}</label>
+                  {{ player_form.role }}
+                </div>
+                <div class="col-12 col-md-6" style="display: none">
+                  <label class="form-label">{{ player_form.batting_style.label }}</label>
+                  {{ player_form.batting_style }}
+                </div>
+                <div class="col-12 col-md-6" style="display: none">
+                  <label class="form-label">{{ player_form.bowling_style.label }}</label>
+                  {{ player_form.bowling_style }}
+                </div>
+                <div class="col-12 col-md-6" style="display: none">
+                  <label class="form-label">{{ player_form.base_price.label }}</label>
+                  {{ player_form.base_price }}
+                </div>
+                <div class="col-12 col-md-6" style="display: none">
+                  <label class="form-label">{{ player_form.reserve_price.label }}</label>
+                  {{ player_form.reserve_price }}
+                </div>
+                <div class="col-12">
+                  <div class="muted" style="font-weight:800;">Stats</div>
+                </div>
+                <div class="col-12 col-md-3">
+                  <label class="form-label">Matches</label>
+                  {{ player_form.matches }}
+                </div>
+                <div class="col-12 col-md-3">
+                  <label class="form-label">Runs</label>
+                  {{ player_form.runs }}
+                </div>
+                <div class="col-12 col-md-3">
+                  <label class="form-label">Wickets</label>
+                  {{ player_form.wickets }}
+                </div>
+                <div class="col-12 col-md-3">
+                  <label class="form-label">Overs</label>
+                  {{ player_form.overs }}
+                </div>
+                <div class="col-12 col-md-3">
+                  <label class="form-label">Eco</label>
+                  {{ player_form.eco }}
+                </div>
+                <div class="col-12 col-md-3">
+                  <label class="form-label">Bat Avg</label>
+                  {{ player_form.bat_avg }}
+                </div>
+                <div class="col-12 col-md-3">
+                  <label class="form-label">Bat SR</label>
+                  {{ player_form.bat_sr }}
+                </div>
+                <div class="col-12" style="display: none">
+                  <label class="form-label">{{ player_form.notes.label }}</label>
+                  {{ player_form.notes }}
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer" style="border-top:1px solid var(--line);">
+              <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" class="btn btn-accent">Save Changes</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        (function () {
+            const q = document.getElementById("q");
+            const role = document.getElementById("role");
+            const active = document.getElementById("active");
+            const resultCount = document.getElementById("resultCount");
+
+            function getCards() {
+                return Array.from(document.querySelectorAll(".player-card"));
+            }
+
+            function apply() {
+                const cards = getCards();
+                const query = (q.value || "").trim().toLowerCase();
+                const roleVal = role.value;
+                const activeVal = active.value;
+
+                let shown = 0;
+
+                for (const c of cards) {
+                    const name = c.dataset.name || "";
+                    const r = c.dataset.role || "";
+                    const a = c.dataset.active || "";
+
+                    const okName = !query || name.includes(query);
+                    const okRole = !roleVal || r === roleVal;
+                    const okActive = !activeVal || a === activeVal;
+
+                    if (okName && okRole && okActive) {
+                        c.classList.remove("hidden-card");
+                        shown++;
+                    } else {
+                        c.classList.add("hidden-card");
+                    }
+                }
+
+                resultCount.textContent = `Showing ${shown} of ${cards.length} players`;
+            }
+
+            // Expose so AJAX create/update can re-apply filters and counts
+            window.applyPlayerFilters = apply;
+
+            q.addEventListener("input", apply);
+            role.addEventListener("change", apply);
+            active.addEventListener("change", apply);
+
+            apply();
+        })();
+    </script>
+    {% if can_manage %}
+    <script>
+      const editModal = document.getElementById("playerEditModal");
+      if (editModal) {
+        editModal.addEventListener("show.bs.modal", (event) => {
+          const btn = event.relatedTarget;
+          if (!btn) return;
+
+          const idInput = document.getElementById("playerEditId");
+          if (idInput) idInput.value = btn.dataset.playerId || "";
+
+          const setVal = (name, val) => {
+            const input = editModal.querySelector(`[name="${name}"]`);
+            if (input) input.value = val ?? "";
+          };
+
+          setVal("name", btn.dataset.playerName);
+          setVal("phone", btn.dataset.playerPhone);
+          setVal("city", btn.dataset.playerCity);
+          setVal("age", btn.dataset.playerAge);
+          setVal("role", btn.dataset.playerRole);
+          setVal("batting_style", btn.dataset.playerBatting);
+          setVal("bowling_style", btn.dataset.playerBowling);
+          setVal("base_price", btn.dataset.playerBase);
+          setVal("reserve_price", btn.dataset.playerReserve);
+          setVal("notes", btn.dataset.playerNotes);
+          setVal("matches", btn.dataset.playerMatches);
+          setVal("runs", btn.dataset.playerRuns);
+          setVal("wickets", btn.dataset.playerWickets);
+          setVal("overs", btn.dataset.playerOvers);
+          setVal("eco", btn.dataset.playerEco);
+          setVal("bat_avg", btn.dataset.playerBatAvg);
+          setVal("bat_sr", btn.dataset.playerBatSr);
+
+          const isActive = editModal.querySelector('[name="is_active"]');
+          if (isActive) isActive.checked = btn.dataset.playerActive === "1";
+
+          const photo = editModal.querySelector('[name="photo"]');
+          if (photo) photo.value = "";
+        });
+      }
+    </script>
+
+    <script>
+      (function () {
+        function getCookie(name) {
+          const value = `; ${document.cookie}`;
+          const parts = value.split(`; ${name}=`);
+          if (parts.length === 2) return parts.pop().split(';').shift();
+        }
+
+        function clearErrors(el) {
+          if (!el) return;
+          el.classList.add("d-none");
+          el.innerHTML = "";
+        }
+
+        function showErrors(el, out) {
+          if (!el) return;
+
+          const errors = (out && out.errors) || {};
+          const items = [];
+
+          if (out && out.error) items.push(out.error);
+
+          for (const [field, arr] of Object.entries(errors)) {
+            if (!Array.isArray(arr)) continue;
+            for (const e of arr) {
+              const msg = e && e.message ? e.message : String(e);
+              const label = field === "__all__" ? "Error" : field;
+              items.push(`${label}: ${msg}`);
+            }
+          }
+
+          if (!items.length) items.push("Request failed. Please check inputs.");
+
+          const ul = document.createElement("ul");
+          ul.style.margin = "0";
+          for (const it of items) {
+            const li = document.createElement("li");
+            li.textContent = it;
+            ul.appendChild(li);
+          }
+
+          el.innerHTML = "";
+          el.appendChild(ul);
+          el.classList.remove("d-none");
+        }
+
+        function updateCounts(counts) {
+          if (!counts) return;
+
+          const teamCount = document.getElementById("teamCount");
+          const playerCount = document.getElementById("playerCount");
+          const activePlayerCount = document.getElementById("activePlayerCount");
+
+          if (teamCount && counts.total_teams !== undefined && counts.total_teams !== null) {
+            teamCount.textContent = counts.total_teams;
+          }
+          if (playerCount && counts.total_players !== undefined && counts.total_players !== null) {
+            playerCount.textContent = counts.total_players;
+          }
+          if (activePlayerCount && counts.active_players !== undefined && counts.active_players !== null) {
+            activePlayerCount.textContent = counts.active_players;
+          }
+        }
+
+        function htmlToElement(html) {
+          const tmp = document.createElement("div");
+          tmp.innerHTML = (html || "").trim();
+          return tmp.firstElementChild;
+        }
+
+        function insertSortedByDataName(container, el) {
+          if (!container || !el) return;
+          const key = (el.dataset && el.dataset.name) ? el.dataset.name : "";
+          if (!key) {
+            container.appendChild(el);
+            return;
+          }
+
+          const children = Array.from(container.children);
+          for (const child of children) {
+            const cKey = (child.dataset && child.dataset.name) ? child.dataset.name : "";
+            if (cKey && cKey.localeCompare(key) > 0) {
+              container.insertBefore(el, child);
+              return;
+            }
+          }
+          container.appendChild(el);
+        }
+
+        async function submitAjaxForm(form, errorEl) {
+          clearErrors(errorEl);
+
+          const submitBtn = form.querySelector("button[type='submit']");
+          const originalText = submitBtn ? submitBtn.textContent : null;
+          if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = "Saving...";
+          }
+
+          try {
+            const res = await fetch(form.action, {
+              method: form.method || "POST",
+              headers: {
+                "X-Requested-With": "XMLHttpRequest",
+                "X-CSRFToken": getCookie("csrftoken"),
+              },
+              body: new FormData(form),
+            });
+
+            const out = await res.json().catch(() => ({}));
+            if (!res.ok || out.ok === false) {
+              showErrors(errorEl, out);
+              return null;
+            }
+            return out;
+          } catch (err) {
+            showErrors(errorEl, { error: (err && err.message) ? err.message : "Request failed." });
+            return null;
+          } finally {
+            if (submitBtn) {
+              submitBtn.disabled = false;
+              if (originalText !== null) submitBtn.textContent = originalText;
+            }
+          }
+        }
+
+        function hideModal(modalEl) {
+          if (!modalEl || !window.bootstrap) return;
+          const inst = bootstrap.Modal.getInstance(modalEl);
+          if (inst) inst.hide();
+        }
+
+        const playerCreateModal = document.getElementById("playerCreateModal");
+        const playerEditModal = document.getElementById("playerEditModal");
+        const teamCreateModal = document.getElementById("teamCreateModal");
+
+        const playerCreateErrors = document.getElementById("playerCreateErrors");
+        const playerEditErrors = document.getElementById("playerEditErrors");
+        const teamCreateErrors = document.getElementById("teamCreateErrors");
+
+        if (playerCreateModal) playerCreateModal.addEventListener("show.bs.modal", () => clearErrors(playerCreateErrors));
+        if (playerEditModal) playerEditModal.addEventListener("show.bs.modal", () => clearErrors(playerEditErrors));
+        if (teamCreateModal) teamCreateModal.addEventListener("show.bs.modal", () => clearErrors(teamCreateErrors));
+
+        // Team create
+        const teamCreateForm = document.getElementById("teamCreateForm");
+        if (teamCreateForm) {
+          teamCreateForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const out = await submitAjaxForm(teamCreateForm, teamCreateErrors);
+            if (!out) return;
+
+            const teamGrid = document.getElementById("teamGrid");
+            if (teamGrid && out.team_html) {
+              const el = htmlToElement(out.team_html);
+              insertSortedByDataName(teamGrid, el);
+            }
+
+            updateCounts(out.counts);
+            hideModal(teamCreateModal);
+            teamCreateForm.reset();
+          });
+        }
+
+        // Player create
+        const playerCreateForm = document.getElementById("playerCreateForm");
+        if (playerCreateForm) {
+          playerCreateForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const out = await submitAjaxForm(playerCreateForm, playerCreateErrors);
+            if (!out) return;
+
+            const playerGrid = document.getElementById("playerGrid");
+            if (playerGrid && out.player_html) {
+              const el = htmlToElement(out.player_html);
+              insertSortedByDataName(playerGrid, el);
+            }
+
+            updateCounts(out.counts);
+            if (typeof window.applyPlayerFilters === "function") window.applyPlayerFilters();
+
+            hideModal(playerCreateModal);
+            playerCreateForm.reset();
+          });
+        }
+
+        // Player update
+        const playerEditForm = document.getElementById("playerEditForm");
+        if (playerEditForm) {
+          playerEditForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const out = await submitAjaxForm(playerEditForm, playerEditErrors);
+            if (!out) return;
+
+            if (out.player_html && out.player && out.player.id) {
+              const playerGrid = document.getElementById("playerGrid");
+              const el = htmlToElement(out.player_html);
+              const existing = document.getElementById(`player-card-${out.player.id}`);
+              if (existing) existing.remove();
+              insertSortedByDataName(playerGrid, el);
+            }
+
+            updateCounts(out.counts);
+            if (typeof window.applyPlayerFilters === "function") window.applyPlayerFilters();
+
+            hideModal(playerEditModal);
+          });
+        }
+      })();
+    </script>
+
+    {% endif %}
+{% endblock %}

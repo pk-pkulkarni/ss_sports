@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% load inr %}
+
+{% block title %}Manage Lots | {{ tournament.name }}{% endblock %}
+
+{% block head %}
+<style>
+  .lot-board{
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+  }
+  .lot-col{
+    border:1px solid rgba(255,255,255,.14);
+    background: rgba(255,255,255,.04);
+    border-radius: 16px;
+    padding: 12px;
+    min-height: 240px;
+  }
+  .lot-col-head{
+    font-weight: 900;
+    margin-bottom: 10px;
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+  }
+  .dropzone{
+    min-height: 160px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .player-item{
+    border:1px solid rgba(255,255,255,.16);
+    background: rgba(12,18,34,.65);
+    border-radius: 12px;
+    padding: 10px 12px;
+    cursor: grab;
+  }
+  .player-item.dragging{
+    opacity:.6;
+  }
+  .player-item.locked{
+    opacity:.55;
+    cursor:not-allowed;
+    filter: grayscale(.3);
+  }
+  .lot-col.over{
+    outline: 2px dashed rgba(56,189,248,.55);
+    outline-offset: 4px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card-glass p-4 mb-4">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <div>
+      <div class="muted">{{ tournament.name }}</div>
+      <h2 class="mb-1" style="font-weight:900;">Manage Lots (Drag & Drop)</h2>
+      <div class="muted" style="font-size:.9rem;">Only pending players can be moved.</div>
+    </div>
+    <a class="btn btn-outline-light" href="{% url 'tournament_detail' slug=tournament.slug %}">Back</a>
+  </div>
+  <div class="divider"></div>
+
+  <div class="lot-board" id="lotBoard">
+    {% for col in lot_columns %}
+      <div class="lot-col">
+        <div class="lot-col-head">
+          <span>Lot {{ col.lot_no }}</span>
+          <span class="chip">{{ col.lots|length }} players</span>
+        </div>
+        <div class="dropzone" data-lot-no="{{ col.lot_no }}">
+          {% if col.lots %}
+            {% for lot in col.lots %}
+              <div
+                class="player-item {% if lot.status != 'PENDING' %}locked{% endif %}"
+                draggable="{% if lot.status == 'PENDING' %}true{% else %}false{% endif %}"
+                data-lot-id="{{ lot.id }}"
+              >
+                <div style="font-weight:800;">{{ lot.player.name }}</div>
+                <div class="muted" style="font-size:.85rem;">
+                  Base: ₹ {{ lot.base_price_snapshot|inr }}{% if lot.player.role %} • {{ lot.player.get_role_display }}{% endif %}
+                </div>
+                <div class="muted" style="font-size:.78rem;">Status: {{ lot.get_status_display }}</div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="muted placeholder" style="font-size:.9rem;">Drop players here</div>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+  }
+
+  let dragged = null;
+
+  function closestCol(el) {
+    if (!el) return null;
+    if (el.classList && el.classList.contains("lot-col")) return el;
+    return el.closest ? el.closest(".lot-col") : null;
+  }
+
+  function closestZone(el) {
+    if (!el) return null;
+    if (el.classList && el.classList.contains("dropzone")) return el;
+    const col = closestCol(el);
+    return col ? col.querySelector(".dropzone") : null;
+  }
+
+  function bindDraggable(item) {
+    item.addEventListener("dragstart", (e) => {
+      dragged = item;
+      item.classList.add("dragging");
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", item.dataset.lotId || "");
+      }
+    });
+    item.addEventListener("dragend", () => {
+      item.classList.remove("dragging");
+      dragged = null;
+    });
+  }
+
+  document.querySelectorAll(".player-item[draggable='true']").forEach(bindDraggable);
+
+  async function moveLot(lotId, targetLotNo) {
+    const res = await fetch("{% url 'move_lot_player' slug=tournament.slug %}", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": getCookie("csrftoken"),
+      },
+      body: JSON.stringify({ lot_id: Number(lotId), target_lot_no: Number(targetLotNo) }),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok || out.ok === false) {
+      throw new Error(out.error || "Move failed");
+    }
+    return out;
+  }
+
+  function updateColumnCount(colEl) {
+    if (!colEl) return;
+    const zone = colEl.querySelector(".dropzone");
+    const chip = colEl.querySelector(".lot-col-head .chip");
+    if (!zone || !chip) return;
+    const count = zone.querySelectorAll(".player-item").length;
+    chip.textContent = `${count} players`;
+  }
+
+  function bindDropTarget(target) {
+    const onOver = (e) => {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+      const col = closestCol(target);
+      if (col) col.classList.add("over");
+    };
+
+    const onLeave = () => {
+      const col = closestCol(target);
+      if (col) col.classList.remove("over");
+    };
+
+    target.addEventListener("dragenter", onOver);
+    target.addEventListener("dragover", onOver);
+    target.addEventListener("dragleave", onLeave);
+
+    target.addEventListener("drop", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onLeave();
+
+      const zone = closestZone(target);
+      if (!zone) return;
+
+      const lotId = (e.dataTransfer && e.dataTransfer.getData("text/plain")) || (dragged && dragged.dataset.lotId);
+      const targetLotNo = zone.dataset.lotNo;
+      if (!lotId || !targetLotNo) return;
+
+      const draggedEl = dragged || document.querySelector(`.player-item[data-lot-id="${lotId}"]`);
+      if (!draggedEl) return;
+
+      const sourceZone = draggedEl.parentElement;
+      const sourceCol = closestCol(sourceZone);
+      const targetCol = closestCol(zone);
+
+      try {
+        await moveLot(lotId, targetLotNo);
+
+        zone.appendChild(draggedEl);
+
+        const targetPlaceholder = zone.querySelector(".placeholder");
+        if (targetPlaceholder) targetPlaceholder.remove();
+
+        if (sourceZone && !sourceZone.querySelector(".player-item")) {
+          const ph = document.createElement("div");
+          ph.className = "muted placeholder";
+          ph.style.fontSize = ".9rem";
+          ph.textContent = "Drop players here";
+          sourceZone.appendChild(ph);
+        }
+
+        updateColumnCount(sourceCol);
+        updateColumnCount(targetCol);
+      } catch (err) {
+        alert(err.message || "Move failed");
+      }
+    });
+  }
+
+  document.querySelectorAll(".dropzone").forEach(bindDropTarget);
+  document.querySelectorAll(".lot-col").forEach(bindDropTarget);
+</script>
+{% endblock %}
