@@ -332,6 +332,24 @@
               {{ registration_form.jersey_size }}
               {% for error in registration_form.jersey_size.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
             </div>
+            {% if qr_code_url %}
+              <div class="col-12">
+                <div class="mini-card mt-3 text-center">
+                  <div class="muted mb-2" style="font-weight:800;">Scan & Pay</div>
+
+                  <div style="display:flex; justify-content:center;">
+                    <div style="background:#fff; padding:.65rem; border-radius:14px; border:1px solid var(--line);">
+                      <img src="{{ qr_code_url }}" alt="Payment QR"
+                           style="width:200px; max-width:100%; height:auto; display:block;" />
+                    </div>
+                  </div>
+
+                  <div class="muted mt-2" style="font-size:.9rem;">
+                    Scan this QR, complete payment, then upload screenshot below.
+                  </div>
+                </div>
+              </div>
+            {% endif %}
             <div class="col-12 col-md-6">
               <label class="form-label" for="{{ registration_form.payment_screenshot.id_for_label }}">
                 Payment screenshot{% if registration_form.payment_screenshot.field.required %}<span class="req-star">*</span>{% endif %}
@@ -349,34 +367,34 @@
         </form>
       </div>
 
-      <div class="col-12 col-lg-5">
-        <div class="mini-card h-100">
-          <h3 class="h5" style="font-weight:900;">What happens next?</h3>
-          <p class="muted">We will generate:</p>
-          <ul>
-            <li>Team rosters</li>
-            <li>Player profiles with photos</li>
-            <li>Season stats and match history</li>
-            <li>Auction-ready player list</li>
-          </ul>
-
-          <div class="divider"></div>
-
-          {% if qr_code_url %}
-            <div class="muted mb-2">Payment QR</div>
-            <div style="display:flex; justify-content:center;">
-              <div style="background:#fff; padding:.65rem; border-radius:14px; border:1px solid var(--line);">
-                <img src="{{ qr_code_url }}" alt="Payment QR" style="width:220px; height:auto; display:block;" />
-              </div>
-            </div>
-            <div class="muted" style="font-size:.9rem; margin-top:.5rem;">Scan to pay, then upload the payment screenshot in the form.</div>
-            <div class="divider"></div>
-          {% endif %}
-
+{#      <div class="col-12 col-lg-5">#}
+{#        <div class="mini-card h-100">#}
+{#          <h3 class="h5" style="font-weight:900;">What happens next?</h3>#}
+{#          <p class="muted">We will generate:</p>#}
+{#          <ul>#}
+{#            <li>Team rosters</li>#}
+{#            <li>Player profiles with photos</li>#}
+{#            <li>Season stats and match history</li>#}
+{#            <li>Auction-ready player list</li>#}
+{#          </ul>#}
+{##}
+{#          <div class="divider"></div>#}
+{##}
+{#          {% if qr_code_url %}#}
+{#            <div class="muted mb-2">Payment QR</div>#}
+{#            <div style="display:flex; justify-content:center;">#}
+{#              <div style="background:#fff; padding:.65rem; border-radius:14px; border:1px solid var(--line);">#}
+{#                <img src="{{ qr_code_url }}" alt="Payment QR" style="width:220px; height:auto; display:block;" />#}
+{#              </div>#}
+{#            </div>#}
+{#            <div class="muted" style="font-size:.9rem; margin-top:.5rem;">Scan to pay, then upload the payment screenshot in the form.</div>#}
+{#            <div class="divider"></div>#}
+{#          {% endif %}#}
+{##}
 {#          <div class="muted mb-2">Photo preview</div>#}
 {#          <div class="photo-preview" id="photoPreview"><span class="muted">Choose a photo to preview</span></div>#}
-        </div>
-      </div>
+{#        </div>#}
+{#      </div>#}
     </div>
 
     <div class="divider"></div>
