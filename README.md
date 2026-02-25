@@ -4,7 +4,7 @@
 
 Before setting up the project, ensure the following are installed:
 
--   **Python 3.13**
+-   **Python 3.12**
 -   **MySQL** (Create an empty database named `ss_sports`)
 
 ------------------------------------------------------------------------
