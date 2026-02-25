@@ -586,6 +586,7 @@
                     </div>
                     <a class="btn btn-accent" href="{% url 'tournament_detail' slug=tournament.slug %}">Back to Tournament</a>
                 {% else %}
+
                     <div id="lotMeta" data-lot-id="{{ current_lot.id }}"></div>
                     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
                         <div class="chip">LOT #<strong class="ms-1" id="lotNo">{{ current_lot.lot_no }}</strong></div>
@@ -720,17 +721,29 @@
 
         <!-- RIGHT: Teams / bidding panel -->
         <div class="panel">
-            <div class="teamsHeader">
-                <div>
-                    <h5 class="mb-1" style="font-weight:950;">Teams Panel</h5>
-                    <div class="muted" style="font-size:.9rem;">Tap bid buttons to simulate bidding.</div>
-                </div>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+
+                <!-- LEFT: Team count -->
                 <span class="chip">{{ teams|length }} teams</span>
+
+                <!-- RIGHT: Teams Button -->
+                <a class="btn btn-outline-light"
+                   href="/t/{{ tournament.slug }}/teams-dashboard/">
+                   Teams
+                </a>
+
             </div>
+{#            <div class="teamsHeader">#}
+{#                <div>#}
+{#                    <h5 class="mb-1" style="font-weight:950;">Teams Panel</h5>#}
+{#                    <div class="muted" style="font-size:.9rem;">Tap bid buttons to simulate bidding.</div>#}
+{#                </div>#}
+{#                <span class="chip">{{ teams|length }} teams</span>#}
+{#            </div>#}
 
             <div class="teamList">
                 {% for team in teams %}
-                    <div class="teamRow" data-team-id="{{ team.id }}" data-purse="{{ team.purse_remaining|default:0 }}" data-total="{{ team.purse_total|default:0 }}">
+                    <div class="teamRow" data-team-id="{{ team.id }}" data-purse="{{ team.purse_remaining|default:0 }}" data-total="{{ team.purse_total|default:0 }}" data-players="{{ team.players_count|default:0 }}" data-max="{{ team.max_players|default:'' }}">
                         <div class="teamLeft">
                             <div class="logo">
                                 {% if team.logo %}
@@ -746,7 +759,11 @@
                             <div class="min-w-0">
                                 <p class="teamName">{{ team.name }}</p>
                                 <div class="teamPurse">Purse: {{ team.purse_remaining|inr }}
-                                    / {{ team.purse_total|inr }}</div>
+                                    / {{ team.purse_total|inr }}
+                                </div>
+                                <div class="teamPurse teamPlayers">
+                                  Players: {{ team.players_count }}{% if team.max_players %} / {{ team.max_players }}{% endif %}
+                                </div>
                             </div>
                         </div>
 
@@ -1149,6 +1166,19 @@
                             soldRow.dataset.total || 0
                           )}`;
                       }
+
+                      // ✅ Update players count in UI (because sold player is added to team)
+                        const oldPlayers = Number(soldRow.dataset.players || 0);
+                        const newPlayers = oldPlayers + 1;
+                        soldRow.dataset.players = newPlayers;
+
+                        const maxPlayers = soldRow.dataset.max; // can be "" if not set
+
+                        const playersEl = soldRow.querySelector(".teamPlayers");
+                        if (playersEl) {
+                          playersEl.textContent = `Players: ${newPlayers}${maxPlayers ? `/${maxPlayers}` : ""}`;
+                        }
+
                     }
                     updateBidButtons();
 

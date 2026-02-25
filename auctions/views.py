@@ -8,7 +8,7 @@ from django.shortcuts import render, get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_GET
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Count
 
 from tournaments.models import Tournament
 from tournaments.permissions import can_manage_tournament
@@ -189,7 +189,18 @@ def _maybe_log_milestone(lot: AuctionLot, amount: Decimal) -> None:
 def auction_screen(request, slug: str):
     tournament = _tournament_for_user(request.user, slug)
     auction = getattr(tournament, "auction", None)
-    teams = tournament.teams.filter(is_active=True).order_by("name")
+    teams_qs = tournament.teams.filter(is_active=True).order_by("name")
+
+    count_map = {
+        x["team_id"]: x["count"]
+        for x in TeamPlayer.objects.filter(tournament=tournament)
+        .values("team_id")
+        .annotate(count=Count("id"))
+    }
+
+    teams = list(teams_qs)
+    for t in teams:
+        t.players_count = count_map.get(t.id, 0)
 
     current_lot = None
     highest_sold = None

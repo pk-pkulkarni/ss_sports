@@ -149,7 +149,7 @@
           <div class="lab">BALANCE</div>
         </div>
         <div class="tile">
-          <div class="big">{{ item.players_count }}</div>
+          <div class="big">{{ item.players_count }}{% if t.max_players %}/{{ t.max_players }}{% endif %}</div>
           <div class="lab">PLAYERS</div>
         </div>
       </div>
