@@ -9,6 +9,13 @@ __pycache__/
 venv/
 env/
 
+
+/config/settings.py
+/config/.settings.py.swp
+config/settings.py
+config/.settings.py.swp
+config/settings.pyc
+
 # IDE
 .idea/
 .vscode/
