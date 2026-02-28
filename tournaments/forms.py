@@ -213,10 +213,19 @@ class PublicPlayerRegistrationForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
 
         # Only show tournaments that are not archived.
-        self.fields["tournament"].queryset = Tournament.objects.exclude(
+        qs = Tournament.objects.exclude(
             status=Tournament.Status.ARCHIVED
         ).order_by("-created_at")
-        self.fields["tournament"].empty_label = "Select tournament"
+        self.fields["tournament"].queryset = qs
+
+        if qs.exists():
+            first_tournament = qs.first()
+            self.fields["tournament"].initial = first_tournament.pk
+            self.fields["tournament"].disabled = True  # disables UI AND keeps value on POST
+            self.fields["tournament"].empty_label = None  # optional: removes "Select tournament"
+        else:
+            self.fields["tournament"].disabled = True
+            self.fields["tournament"].empty_label = "No tournaments available"
 
         # Public form requirements.
         self.fields["tournament"].required = True
