@@ -21,9 +21,9 @@ from .templatetags.inr import inr as inr_format
 def _allowed_next_amount(current: Decimal) -> Decimal:
     """
     Enforce your rules:
-      10k to 1L  -> +10k
-      >1L to 4L  -> +20k
-      >4L        -> jump to 5L directly (if current < 5L)
+      < 1L        -> +10k
+      1L to < 4L  -> +20k
+      >= 4L       -> +50k
 
     Notes:
       - current is the current highest amount (or base snapshot if no bids)
@@ -32,7 +32,6 @@ def _allowed_next_amount(current: Decimal) -> Decimal:
     ten_k = Decimal("10000")
     one_l = Decimal("100000")
     four_l = Decimal("400000")
-    five_l = Decimal("500000")
 
     if current < one_l:
         return current + ten_k
@@ -40,11 +39,11 @@ def _allowed_next_amount(current: Decimal) -> Decimal:
     if one_l <= current < four_l:
         return current + Decimal("20000")
 
-    # after 4L, allow jump to 5L (only if not reached)
-    if four_l <= current < five_l:
-        return five_l
+    # after 4L, +50k
+    if current >= four_l:
+        return current + Decimal("50000")
 
-    # If already >= 5L, keep +20k as default (can change later)
+    # fallback
     return current + Decimal("20000")
 
 
@@ -611,7 +610,7 @@ def auction_updates_public(request, slug: str):
     return render(
         request,
         "auctions/auction_updates.html",
-        {"tournament": tournament, "auction": auction},
+        {"tournament": tournament, "auction": auction, "hide_nav": True},
     )
 
 

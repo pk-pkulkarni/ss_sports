@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% load static inr %}
+
+{% block title %}Edit Team | {{ team.name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+  <div>
+    <div class="muted" style="font-weight:800;">{{ tournament.name }}</div>
+    <h2 style="font-weight:950;margin:0;">Edit Team</h2>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a class="btn btn-outline-light" href="{% url 'tournament_detail' slug=tournament.slug %}">Back to Tournament</a>
+    <a class="btn btn-accent" href="{% url 'auction_screen' slug=tournament.slug %}">Auction</a>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-12 col-lg-5">
+    <div class="card-glass p-4">
+      <div class="d-flex align-items-center justify-content-between gap-2">
+        <div>
+          <div class="muted" style="font-weight:800;">Team</div>
+          <div style="font-weight:950; font-size:1.25rem;">{{ team.name }}</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <form method="post" enctype="multipart/form-data" novalidate>
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">{{ form.name.label }}</label>
+            {{ form.name }}
+            {% for e in form.name.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">{{ form.short_name.label }}</label>
+            {{ form.short_name }}
+            {% for e in form.short_name.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="col-12 col-md-8">
+            <label class="form-label">{{ form.logo.label }}</label>
+            {{ form.logo }}
+            {% for e in form.logo.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="col-12">
+            <div class="form-check">
+              {{ form.is_active }}
+              <label class="form-check-label">Active</label>
+            </div>
+            {% for e in form.is_active.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">{{ form.purse_total.label }}</label>
+            {{ form.purse_total }}
+            {% for e in form.purse_total.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">{{ form.purse_remaining.label }}</label>
+            {{ form.purse_remaining }}
+            {% for e in form.purse_remaining.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">{{ form.min_players.label }}</label>
+            {{ form.min_players }}
+            {% for e in form.min_players.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">{{ form.max_players.label }}</label>
+            {{ form.max_players }}
+            {% for e in form.max_players.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <button type="submit" class="btn btn-accent" name="action" value="save_team">Save Team</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-7">
+    <div class="card-glass p-4">
+      <div class="d-flex flex-wrap align-items-end justify-content-between gap-2">
+        <div>
+          <h3 class="mb-1" style="font-weight:950;">Squad</h3>
+          <div class="muted">Update owner/captain using Designation.</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="table-wrap">
+        <table class="table table-sports table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th style="width: 42%;">Player</th>
+              <th style="width: 18%;">Type</th>
+              <th style="width: 18%;">Price</th>
+              <th style="width: 18%;">Designation</th>
+              <th style="width: 4%;"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for tp in squad %}
+              <tr>
+                <td style="font-weight:900;">{{ tp.player.name }}</td>
+                <td class="muted">
+                  {% if tp.bought_in_auction_id %}Auction{% else %}Retained{% endif %}
+                </td>
+                <td class="muted">₹ {{ tp.bought_price|inr }}</td>
+                <td>
+                  <select class="form-select form-select-sm" name="designation_{{ tp.id }}" form="designationForm">
+                    {% for val,label in designation_choices %}
+                      <option value="{{ val }}" {% if tp.designation == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </td>
+                <td class="text-end">
+                  {% if not tp.bought_in_auction_id %}
+                    <form method="post" style="margin:0; display:inline;">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="remove_player" />
+                      <input type="hidden" name="team_player_id" value="{{ tp.id }}" />
+                      <button
+                        type="submit"
+                        class="btn btn-sm btn-outline-light"
+                        onclick="return confirm('Remove {{ tp.player.name|escapejs }} from {{ team.name|escapejs }}?');"
+                      >Remove</button>
+                    </form>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="5" class="muted">No players assigned yet.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <form id="designationForm" method="post" class="mt-3">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline-light" name="action" value="update_designations">Save Designations</button>
+      </form>
+
+      <div class="divider"></div>
+
+      <div>
+        <h4 class="mb-1" style="font-weight:950;">Add retained / pre-auction player</h4>
+        <div class="muted">Only players not SOLD and not already assigned to any team are shown.</div>
+      </div>
+
+      <form method="post" class="row g-3 align-items-end mt-1">
+        {% csrf_token %}
+
+        <div class="col-12 col-md-8">
+          <label class="form-label">Player</label>
+          <select class="form-select" name="player_id" required>
+            <option value="">Select player</option>
+            {% for p in available_players %}
+              <option value="{{ p.id }}">{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-12 col-md-4">
+          <label class="form-label">Retained price (optional)</label>
+          <input class="form-control" type="number" name="retained_price" min="0" step="1000" placeholder="0" />
+        </div>
+
+        <div class="col-12">
+          <button type="submit" class="btn btn-outline-light" name="action" value="add_player">Add to Team</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -10,7 +10,7 @@
   <div class="glow"></div>
 
   {% if can_manage %}
-    <div class="player-actions">
+    <div class="player-actions d-flex gap-2">
       <button
         class="btn btn-sm btn-outline-light"
         data-bs-toggle="modal"
@@ -37,6 +37,16 @@
         data-player-bat-sr="{{ p.stats.bat_sr|default:'' }}"
         data-player-active="{{ p.is_active|yesno:'1,0' }}"
       >Edit</button>
+
+      {% if p.id not in sold_player_ids and p.id not in assigned_player_ids %}
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-danger btn-delete-player"
+          data-player-id="{{ p.id }}"
+          data-player-name="{{ p.name|escapejs }}"
+          data-delete-url="{% url 'player_delete' slug=tournament.slug player_id=p.id %}"
+        >Delete</button>
+      {% endif %}
     </div>
   {% endif %}
 

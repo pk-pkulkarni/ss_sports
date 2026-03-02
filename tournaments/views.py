@@ -10,6 +10,8 @@ from django.template.loader import render_to_string
 from django.utils.crypto import get_random_string
 from django.views.decorators.http import require_POST
 
+from decimal import Decimal, InvalidOperation
+
 from auctions.models import Auction, Team, TeamPlayer, Player, AuctionLot
 from auctions.services import (
     generate_lots_from_active_players,
@@ -112,10 +114,26 @@ def tournament_detail(request, slug: str):
     )
     teams = tournament.teams.order_by("name")
     players = tournament.players.order_by("name")
+
+    sold_player_ids = set()
+    if tournament.auction:
+        sold_player_ids = set(
+            AuctionLot.objects.filter(
+                auction=tournament.auction,
+                status=AuctionLot.Status.SOLD,
+            ).values_list("player_id", flat=True)
+        )
+
+    assigned_player_ids = set(
+        TeamPlayer.objects.filter(tournament=tournament).values_list("player_id", flat=True)
+    )
+
     context = {
         "tournament": tournament,
         "teams": teams,
         "players": players,
+        "sold_player_ids": sold_player_ids,
+        "assigned_player_ids": assigned_player_ids,
         "total_players": players.count(),
         "active_players": players.filter(is_active=True).count(),
         "total_teams": teams.count(),
@@ -152,12 +170,22 @@ def generate_random_lots(request, slug: str):
         slug=slug,
     )
 
+    try:
+        max_lots = int(request.POST.get("max_lots") or 0)
+    except (TypeError, ValueError):
+        max_lots = 0
+
+    if max_lots < 2 or max_lots > 5:
+        messages.error(request, "Please choose lots between 2 and 5.")
+        return redirect("tournament_detail", slug=tournament.slug)
+
     auction = _ensure_auction(tournament)
-    created, skipped = generate_random_lots_from_active_players(auction, max_lots=4, reset=True)
+    created, skipped = generate_random_lots_from_active_players(auction, max_lots=max_lots, reset=True)
+    lot_count = AuctionLot.objects.filter(auction=auction).values("lot_no").distinct().count()
 
     messages.success(
         request,
-        f"✅ Random lots generated (reset). Created: {created}. Skipped (already existed): {skipped}.",
+        f"✅ Random lots generated (reset). Lots: {lot_count}. Created: {created}. Skipped (already existed): {skipped}.",
     )
     return redirect("tournament_detail", slug=tournament.slug)
 
@@ -184,7 +212,7 @@ def team_create(request, slug: str):
             if _is_ajax(request):
                 team_html = render_to_string(
                     "tournaments/partials/team_card.html",
-                    {"team": team},
+                    {"team": team, "tournament": tournament},
                     request=request,
                 )
                 players_qs = tournament.players.all()
@@ -225,6 +253,178 @@ def team_create(request, slug: str):
 
 
 @login_required
+def team_edit(request, slug: str, team_id: int):
+    tournament = get_object_or_404(_filter_tournament_qs(Tournament, request.user), slug=slug)
+
+    if not can_manage_tournament(request.user, tournament):
+        messages.error(request, "Forbidden.")
+        return redirect("tournament_detail", slug=tournament.slug)
+
+    team = get_object_or_404(Team, pk=team_id, tournament=tournament)
+
+    action = (request.POST.get("action") or "").strip() if request.method == "POST" else ""
+
+    # Team details save
+    if request.method == "POST" and action == "save_team":
+        form = TeamCreateForm(request.POST, request.FILES, instance=team)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Team updated.")
+            return redirect("team_edit", slug=tournament.slug, team_id=team.id)
+        messages.error(request, "Please correct the errors below and try again.")
+    else:
+        form = TeamCreateForm(instance=team)
+
+    # Update designations
+    if request.method == "POST" and action == "update_designations":
+        squad_qs = TeamPlayer.objects.filter(tournament=tournament, team=team)
+        updated = 0
+        with transaction.atomic():
+            for tp in squad_qs:
+                key = f"designation_{tp.id}"
+                new_val = (request.POST.get(key) or "").strip()
+                allowed = {c[0] for c in TeamPlayer.Designation.choices}
+                if new_val and new_val in allowed and tp.designation != new_val:
+                    tp.designation = new_val
+                    tp.save(update_fields=["designation", "updated_at"])
+                    updated += 1
+        messages.success(request, f"Updated designations for {updated} player(s).")
+        return redirect("team_edit", slug=tournament.slug, team_id=team.id)
+
+    # Add retained / pre-auction player to team
+    if request.method == "POST" and action == "add_player":
+        try:
+            player_id = int(request.POST.get("player_id") or 0)
+        except (TypeError, ValueError):
+            player_id = 0
+
+        price_raw = (request.POST.get("retained_price") or "").strip()
+        retained_price = Decimal("0")
+        if price_raw:
+            try:
+                retained_price = Decimal(price_raw)
+            except (InvalidOperation, ValueError):
+                retained_price = Decimal("0")
+        if retained_price < 0:
+            retained_price = Decimal("0")
+
+        player = get_object_or_404(Player, pk=player_id, tournament=tournament)
+
+        sold_exists = AuctionLot.objects.filter(
+            auction__tournament=tournament,
+            player=player,
+            status=AuctionLot.Status.SOLD,
+        ).exists()
+        if sold_exists:
+            messages.error(request, "Can't assign: this player is already SOLD in auction.")
+            return redirect("team_edit", slug=tournament.slug, team_id=team.id)
+
+        if TeamPlayer.objects.filter(tournament=tournament, player=player).exists():
+            messages.error(request, "This player is already assigned to a team.")
+            return redirect("team_edit", slug=tournament.slug, team_id=team.id)
+
+        auction = _ensure_auction(tournament)
+        lot = AuctionLot.objects.filter(auction=auction, player=player).first()
+        if lot and lot.status == AuctionLot.Status.RUNNING:
+            messages.error(request, "Can't assign while this player's lot is RUNNING.")
+            return redirect("team_edit", slug=tournament.slug, team_id=team.id)
+
+        # Purse check (if configured)
+        if (team.purse_total or 0) > 0 and retained_price > 0:
+            if (team.purse_remaining or 0) < retained_price:
+                messages.error(request, "Team doesn't have enough purse remaining for this retained price.")
+                return redirect("team_edit", slug=tournament.slug, team_id=team.id)
+
+        with transaction.atomic():
+            TeamPlayer.objects.create(
+                tournament=tournament,
+                team=team,
+                player=player,
+                bought_in_auction=None,
+                bought_price=retained_price,
+                status=TeamPlayer.Status.ACTIVE,
+                designation=TeamPlayer.Designation.PLAYER,
+            )
+
+            # Deduct purse_remaining if configured
+            if (team.purse_total or 0) > 0 and retained_price > 0:
+                team.purse_remaining = (team.purse_remaining or 0) - retained_price
+                team.save(update_fields=["purse_remaining", "updated_at"])
+
+            # Ensure player won't come up for bidding again.
+            if lot and lot.status != AuctionLot.Status.SOLD:
+                lot.status = AuctionLot.Status.WITHDRAWN
+                lot.save(update_fields=["status", "updated_at"])
+
+        messages.success(request, f"Assigned {player.name} to {team.name}.")
+        return redirect("team_edit", slug=tournament.slug, team_id=team.id)
+
+    # Remove retained player (only if not sold via auction)
+    if request.method == "POST" and action == "remove_player":
+        try:
+            tp_id = int(request.POST.get("team_player_id") or 0)
+        except (TypeError, ValueError):
+            tp_id = 0
+
+        tp = get_object_or_404(TeamPlayer, pk=tp_id, tournament=tournament, team=team)
+        if tp.bought_in_auction_id:
+            messages.error(request, "Can't remove: this player was bought in auction.")
+            return redirect("team_edit", slug=tournament.slug, team_id=team.id)
+
+        refund = Decimal(str(tp.bought_price or 0))
+        auction = _ensure_auction(tournament)
+        lot = AuctionLot.objects.filter(auction=auction, player=tp.player).first()
+
+        with transaction.atomic():
+            tp.delete()
+
+            # Refund purse_remaining if configured
+            if (team.purse_total or 0) > 0 and refund > 0:
+                team.purse_remaining = (team.purse_remaining or 0) + refund
+                team.save(update_fields=["purse_remaining", "updated_at"])
+
+            # Optionally reopen lot if it was withdrawn by retention
+            if lot and lot.status == AuctionLot.Status.WITHDRAWN:
+                lot.status = AuctionLot.Status.PENDING
+                lot.save(update_fields=["status", "updated_at"])
+
+        messages.success(request, f"Removed {tp.player.name} from {team.name}.")
+        return redirect("team_edit", slug=tournament.slug, team_id=team.id)
+
+    squad = (
+        TeamPlayer.objects.filter(tournament=tournament, team=team)
+        .select_related("player")
+        .order_by("player__name")
+    )
+
+    assigned_ids = TeamPlayer.objects.filter(tournament=tournament).values_list("player_id", flat=True)
+    sold_ids = AuctionLot.objects.filter(
+        auction__tournament=tournament,
+        status=AuctionLot.Status.SOLD,
+    ).values_list("player_id", flat=True)
+
+    available_players = (
+        Player.objects.filter(tournament=tournament)
+        .exclude(id__in=assigned_ids)
+        .exclude(id__in=sold_ids)
+        .order_by("name")
+    )
+
+    return render(
+        request,
+        "tournaments/team_edit.html",
+        {
+            "tournament": tournament,
+            "team": team,
+            "form": form,
+            "squad": squad,
+            "available_players": available_players,
+            "designation_choices": TeamPlayer.Designation.choices,
+        },
+    )
+
+
+@login_required
 def player_create(request, slug: str):
     tournament = get_object_or_404(_filter_tournament_qs(Tournament, request.user), slug=slug)
 
@@ -242,6 +442,8 @@ def player_create(request, slug: str):
                         "p": player,
                         "tournament": tournament,
                         "can_manage": can_manage_tournament(request.user, tournament),
+                        "sold_player_ids": set(),
+                        "assigned_player_ids": set(),
                     },
                     request=request,
                 )
@@ -303,12 +505,26 @@ def player_update(request, slug: str):
         form.save()
 
         if _is_ajax(request):
+            sold_player_ids = set(
+                AuctionLot.objects.filter(
+                    auction__tournament=tournament,
+                    player=player,
+                    status=AuctionLot.Status.SOLD,
+                ).values_list("player_id", flat=True)
+            )
+            assigned_player_ids = set(
+                TeamPlayer.objects.filter(tournament=tournament, player=player).values_list(
+                    "player_id", flat=True
+                )
+            )
             player_html = render_to_string(
                 "tournaments/partials/player_card.html",
                 {
                     "p": player,
                     "tournament": tournament,
                     "can_manage": can_manage_tournament(request.user, tournament),
+                    "sold_player_ids": sold_player_ids,
+                    "assigned_player_ids": assigned_player_ids,
                 },
                 request=request,
             )
@@ -340,6 +556,78 @@ def player_update(request, slug: str):
             )
         messages.error(request, "Could not update player. Please check the inputs.")
 
+    return redirect("tournament_detail", slug=tournament.slug)
+
+
+@login_required
+@require_POST
+def player_delete(request, slug: str, player_id: int):
+    tournament = get_object_or_404(_filter_tournament_qs(Tournament, request.user), slug=slug)
+
+    if not can_manage_tournament(request.user, tournament):
+        if _is_ajax(request):
+            return JsonResponse({"ok": False, "error": "Forbidden"}, status=403)
+        messages.error(request, "Forbidden.")
+        return redirect("tournament_detail", slug=tournament.slug)
+
+    player = get_object_or_404(Player, pk=player_id, tournament=tournament)
+
+    sold_exists = AuctionLot.objects.filter(
+        auction__tournament=tournament,
+        player=player,
+        status=AuctionLot.Status.SOLD,
+    ).exists()
+    if sold_exists:
+        if _is_ajax(request):
+            return JsonResponse(
+                {"ok": False, "error": "Can't delete: this player is SOLD in auction."},
+                status=400,
+            )
+        messages.error(request, "Can't delete: this player is SOLD in auction.")
+        return redirect("tournament_detail", slug=tournament.slug)
+
+    if TeamPlayer.objects.filter(tournament=tournament, player=player).exists():
+        if _is_ajax(request):
+            return JsonResponse(
+                {"ok": False, "error": "Can't delete: this player is assigned to a team."},
+                status=400,
+            )
+        messages.error(request, "Can't delete: this player is assigned to a team.")
+        return redirect("tournament_detail", slug=tournament.slug)
+
+    running_exists = AuctionLot.objects.filter(
+        auction__tournament=tournament,
+        player=player,
+        status=AuctionLot.Status.RUNNING,
+    ).exists()
+    if running_exists:
+        if _is_ajax(request):
+            return JsonResponse(
+                {"ok": False, "error": "Can't delete: this player's lot is RUNNING."},
+                status=400,
+            )
+        messages.error(request, "Can't delete: this player's lot is RUNNING.")
+        return redirect("tournament_detail", slug=tournament.slug)
+
+    player.delete()
+
+    players_qs = tournament.players.all()
+    teams_qs = tournament.teams.all()
+
+    if _is_ajax(request):
+        return JsonResponse(
+            {
+                "ok": True,
+                "player_id": player_id,
+                "counts": {
+                    "total_teams": teams_qs.count(),
+                    "total_players": players_qs.count(),
+                    "active_players": players_qs.filter(is_active=True).count(),
+                },
+            }
+        )
+
+    messages.success(request, "Player deleted.")
     return redirect("tournament_detail", slug=tournament.slug)
 
 

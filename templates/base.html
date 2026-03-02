@@ -193,6 +193,7 @@
 </head>
 <body>
 <div class="site-overlay">
+  {% if not hide_nav %}
   <nav class="navbar navbar-expand-lg nav-glass navbar-dark">
     <div class="container py-2">
       <a class="navbar-brand brand" href="{% if user.is_authenticated %}{% url 'tournament_list' %}{% else %}{% url 'landing' %}{% endif %}">SS Cricket</a>
@@ -222,6 +223,7 @@
       </div>
     </div>
   </nav>
+  {% endif %}
 
   {% if messages %}
     <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100;">

@@ -11,7 +11,11 @@
         {% endif %}
       </div>
       <div>
-        <div style="font-weight:900; font-size:1.05rem;">{{ team.name }}</div>
+        <div style="font-weight:900; font-size:1.05rem;">
+          <a href="{% url 'team_edit' slug=tournament.slug team_id=team.id %}" style="color: inherit; text-decoration: none;">
+            {{ team.name }}
+          </a>
+        </div>
         <div class="muted" style="font-size:.9rem;">
           Purse: <span class="price">₹ {{ team.purse_remaining|inr }}</span>
           / ₹ {{ team.purse_total|inr }}

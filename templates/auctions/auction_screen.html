@@ -682,7 +682,24 @@
                         </div>
                     </div>
 
-                    <div class="statsPanel" id="highestSoldPanel" style="display: none">
+                    <div class="bidBox">
+{#                        <div>#}
+{#                            <div class="muted" style="font-weight:800;">Quick controls (UI only)</div>#}
+{#                            <div class="muted" style="font-size:.9rem;">Next we’ll connect these buttons to DB + live#}
+{#                                updates.#}
+{#                            </div>#}
+{#                        </div>#}
+
+                        <div class="controls">
+                            <button class="btn btn-soft" id="undoBid">Undo Last Bid</button>
+                            <button class="btn btn-soft btn-success-soft" id="markSold">Mark SOLD</button>
+                            <button class="btn btn-soft btn-danger-soft" id="markUnsold">Mark UNSOLD</button>
+{#                            <button class="btn btn-soft" id="nextLot">Next Lot</button>#}
+                            <button class="btn btn-soft" id="startUnsoldRound">Start Unsold</button>
+                        </div>
+                    </div>
+
+                    <div class="statsPanel" id="highestSoldPanel">
                         <div class="statLabel">Highest Sold (so far)</div>
                         <div class="statValue" id="highestSoldPrice">
                             {% if highest_sold %}
@@ -700,22 +717,6 @@
                         </div>
                     </div>
 
-                    <div class="bidBox">
-{#                        <div>#}
-{#                            <div class="muted" style="font-weight:800;">Quick controls (UI only)</div>#}
-{#                            <div class="muted" style="font-size:.9rem;">Next we’ll connect these buttons to DB + live#}
-{#                                updates.#}
-{#                            </div>#}
-{#                        </div>#}
-
-                        <div class="controls">
-                            <button class="btn btn-soft" id="undoBid">Undo Last Bid</button>
-                            <button class="btn btn-soft btn-success-soft" id="markSold">Mark SOLD</button>
-                            <button class="btn btn-soft btn-danger-soft" id="markUnsold">Mark UNSOLD</button>
-{#                            <button class="btn btn-soft" id="nextLot">Next Lot</button>#}
-                            <button class="btn btn-soft" id="startUnsoldRound">Start Unsold</button>
-                        </div>
-                    </div>
                 {% endif %}
         </div>
 
@@ -1312,8 +1313,8 @@
             if (current >= 100000 && current < 400000) {
                 return {amount: current + 20000, label: "+20k"};
             }
-            if (current >= 400000 && current < 500000) {
-                return {amount: 500000, label: "JUMP 5L"};
+            if (current >= 400000) {
+                return {amount: current + 50000, label: "+50k"};
             }
             return {amount: current + 20000, label: "+20k"};
         }

@@ -228,9 +228,10 @@
 {#                        {% csrf_token %}#}
 {#                        <button type="submit" class="btn btn-outline-light">Generate Lots</button>#}
 {#                    </form>#}
-                    <form method="post" action="{% url 'generate_random_lots' slug=tournament.slug %}" style="margin:0;">
+                    <form method="post" id="randomLotsForm" action="{% url 'generate_random_lots' slug=tournament.slug %}" style="margin:0;">
                         {% csrf_token %}
-                        <button type="submit" class="btn btn-outline-light">Generate Random Lots</button>
+                        <input type="hidden" name="max_lots" id="randomLotsCount" value="4" />
+                        <button type="button" class="btn btn-outline-light" id="randomLotsBtn">Generate Random Lots</button>
                     </form>
                     <a class="btn btn-outline-light" href="{% url 'lot_manager' slug=tournament.slug %}">Manage Lots</a>
                 {% endif %}
@@ -252,7 +253,7 @@
 
         <div class="team-grid" id="teamGrid">
             {% for team in teams %}
-                {% include "tournaments/partials/team_card.html" with team=team %}
+                {% include "tournaments/partials/team_card.html" with team=team tournament=tournament %}
             {% endfor %}
         </div>
     </div>
@@ -870,8 +871,83 @@
             hideModal(playerEditModal);
           });
         }
+
+        // Player delete
+        async function deletePlayer(btn) {
+          const url = btn.dataset.deleteUrl;
+          const playerId = btn.dataset.playerId;
+          const playerName = btn.dataset.playerName || "this player";
+          if (!url) return;
+
+          if (!confirm(`Delete ${playerName}? This cannot be undone.`)) return;
+
+          const originalText = btn.textContent;
+          btn.disabled = true;
+          btn.textContent = "Deleting...";
+
+          try {
+            const res = await fetch(url, {
+              method: "POST",
+              headers: {
+                "X-Requested-With": "XMLHttpRequest",
+                "X-CSRFToken": getCookie("csrftoken"),
+              },
+            });
+
+            const out = await res.json().catch(() => ({}));
+            if (!res.ok || out.ok === false) {
+              const msg = (out && out.error) ? out.error : "Could not delete player.";
+              alert(msg);
+              return;
+            }
+
+            const id = out.player_id || playerId;
+            const card = document.getElementById(`player-card-${id}`);
+            if (card) card.remove();
+
+            updateCounts(out.counts);
+            if (typeof window.applyPlayerFilters === "function") window.applyPlayerFilters();
+          } catch (err) {
+            alert((err && err.message) ? err.message : "Request failed.");
+          } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
+          }
+        }
+
+        document.addEventListener("click", (e) => {
+          const btn = e.target.closest(".btn-delete-player");
+          if (!btn) return;
+          e.preventDefault();
+          deletePlayer(btn);
+        });
       })();
     </script>
 
+    {% endif %}
+
+    {% if can_manage %}
+    <script>
+      (function () {
+        const form = document.getElementById('randomLotsForm');
+        const btn = document.getElementById('randomLotsBtn');
+        const input = document.getElementById('randomLotsCount');
+        if (!form || !btn || !input) return;
+
+        btn.addEventListener('click', () => {
+          const raw = prompt('How many lots? (2 to 5)\n\nNote: This will reset existing lots/bids.', input.value || '4');
+          if (raw === null) return;
+
+          const n = parseInt(String(raw).trim(), 10);
+          if (!Number.isFinite(n) || n < 2 || n > 5) {
+            alert('Please enter a number between 2 and 5.');
+            return;
+          }
+
+          input.value = String(n);
+          form.submit();
+        });
+      })();
+    </script>
     {% endif %}
 {% endblock %}
