@@ -10,7 +10,7 @@
   <div class="glow"></div>
 
   {% if can_manage %}
-    <div class="player-actions d-flex gap-2">
+    <div class="player-actions d-flex gap-2 flex-wrap justify-content-end mb-2">
       <button
         class="btn btn-sm btn-outline-light"
         data-bs-toggle="modal"
@@ -51,13 +51,13 @@
   {% endif %}
 
   <div class="player-top">
-{#    <div class="avatar">#}
-{#      {% if p.photo %}#}
-{#        <img src="{{ p.photo.url }}" alt="{{ p.name }}">#}
-{#      {% else %}#}
-{#        <img src="{% static 'img/player-placeholder.png' %}" alt="{{ p.name }}">#}
-{#      {% endif %}#}
-{#    </div>#}
+    <div class="avatar">
+      {% if p.photo %}
+        <img src="{{ p.photo.url }}" alt="{{ p.name }}">
+      {% else %}
+        <img src="{% static 'img/player-placeholder.png' %}" alt="{{ p.name }}">
+      {% endif %}
+    </div>
 
     <div class="flex-grow-1">
       <div style="font-weight:900; font-size:1.02rem; line-height:1.15;">{{ p.name }}</div>
