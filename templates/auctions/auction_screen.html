@@ -588,6 +588,17 @@
                 {% else %}
 
                     <div id="lotMeta" data-lot-id="{{ current_lot.id }}"></div>
+
+                    {% if auction_fully_completed %}
+                        <div class="alert alert-success py-2 px-3 mb-3" style="border-radius: 14px;">
+                            Auction completed! All players are SOLD.
+                        </div>
+                    {% elif auction_completed %}
+                        <div class="alert alert-success py-2 px-3 mb-3" style="border-radius: 14px;">
+                            Round completed. If you have UNSOLD players, click <strong>Start Unsold</strong> to relist them.
+                        </div>
+                    {% endif %}
+
                     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
                         <div class="chip">LOT #<strong class="ms-1" id="lotNo">{{ current_lot.lot_no }}</strong></div>
                         <div class="chip">Lot Status: <strong class="ms-1"
@@ -795,10 +806,34 @@
 
         <div class="toastBid" id="toastBid"></div>
 
+        <canvas
+            id="confettiCanvas"
+            style="position:fixed; inset:0; width:100%; height:100%; z-index:2000; pointer-events:none; display:none;"
+        ></canvas>
+
+        <div class="modal fade" id="auctionCompletedModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content card-glass" style="border-radius: 18px;">
+                    <div class="modal-body text-center p-4 position-relative">
+                        <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3" data-bs-dismiss="modal" aria-label="Close"></button>
+                        <h2 style="font-weight:950; margin:0;">Auction Completed</h2>
+                        <div class="muted mt-2" style="font-weight:800;">
+                            All players are SOLD.
+                        </div>
+                        <div class="mt-4 d-flex justify-content-center gap-2 flex-wrap">
+                            <button type="button" class="btn btn-accent" data-bs-dismiss="modal">OK</button>
+                            <a class="btn btn-outline-light" href="{% url 'tournament_detail' slug=tournament.slug %}">Back to Tournament</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     {% endif %}
 {% endblock %}
 
 {% block scripts %}
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <script>
         function getCookie(name) {
             const value = `; ${document.cookie}`;
@@ -885,11 +920,117 @@
             // Initialize timer display if enabled
             resetBidTimer();
 
+            let auctionCompleted = {{ auction_completed|yesno:"true,false" }};
+            let auctionFullyCompleted = {{ auction_fully_completed|yesno:"true,false" }};
+            let completionCelebrated = false;
+
+            const confettiCanvas = document.getElementById("confettiCanvas");
+            const confettiFn = (typeof confetti === "function" && confettiCanvas)
+                ? confetti.create(confettiCanvas, { resize: true, useWorker: true })
+                : (typeof confetti === "function" ? confetti : null);
+
+            function fireConfetti() {
+                if (!confettiFn) return;
+                if (confettiCanvas) confettiCanvas.style.display = "block";
+
+                const duration = 2200;
+                const end = Date.now() + duration;
+
+                (function frame() {
+                    confettiFn({
+                        particleCount: 4,
+                        angle: 60,
+                        spread: 55,
+                        origin: { x: 0, y: 0.65 },
+                    });
+                    confettiFn({
+                        particleCount: 4,
+                        angle: 120,
+                        spread: 55,
+                        origin: { x: 1, y: 0.65 },
+                    });
+
+                    if (Date.now() < end) {
+                        requestAnimationFrame(frame);
+                    } else {
+                        confettiFn({ particleCount: 180, spread: 70, origin: { y: 0.6 } });
+
+                        if (confettiCanvas) {
+                            setTimeout(() => {
+                                confettiCanvas.style.display = "none";
+                            }, 1600);
+                        }
+                    }
+                })();
+            }
+
+            function showAuctionCompletedModal() {
+                const modalEl = document.getElementById("auctionCompletedModal");
+                if (!modalEl || typeof bootstrap === "undefined") return;
+                const modal = bootstrap.Modal.getOrCreateInstance(modalEl, {
+                    backdrop: "static",
+                    keyboard: true,
+                });
+                modal.show();
+            }
+
+            function celebrateAuctionFullyCompleted() {
+                if (completionCelebrated) return;
+                completionCelebrated = true;
+                showAuctionCompletedModal();
+                fireConfetti();
+            }
+
+            function updateLotRestrictions() {
+                const markUnsoldBtn = document.getElementById("markUnsold");
+                const markSoldBtn = document.getElementById("markSold");
+                const undoBtn = document.getElementById("undoBid");
+
+                if (undoBtn) undoBtn.disabled = auctionCompleted;
+                if (markSoldBtn) markSoldBtn.disabled = auctionCompleted;
+
+                if (markUnsoldBtn) {
+                    if (auctionCompleted) {
+                        markUnsoldBtn.disabled = true;
+                        markUnsoldBtn.title = "Auction completed";
+                    } else {
+                        markUnsoldBtn.disabled = false;
+                        markUnsoldBtn.title = "";
+                    }
+                }
+
+                if (auctionCompleted) {
+                    document.querySelectorAll(".bidBtn").forEach(b => b.disabled = true);
+                }
+            }
+
+            function handleAuctionCompleted(fullyCompleted = false) {
+                auctionCompleted = true;
+                auctionFullyCompleted = !!fullyCompleted;
+
+                const lotStatusEl = document.getElementById("lotStatus");
+                if (lotStatusEl) lotStatusEl.textContent = "Completed";
+
+                if (bidTeamEl) {
+                    bidTeamEl.textContent = auctionFullyCompleted ? "Auction completed" : "Round completed";
+                }
+
+                document.querySelectorAll(".bidBtn").forEach(b => b.disabled = true);
+                updateLotRestrictions();
+
+                if (auctionFullyCompleted) {
+                    showToast("Auction completed. All players are SOLD.");
+                    celebrateAuctionFullyCompleted();
+                } else {
+                    showToast("Round completed. If you have UNSOLD players, click Start Unsold.");
+                }
+            }
+
             function showToast(msg, isErr = false) {
                 toast.textContent = msg;
                 toast.style.borderColor = isErr ? "rgba(248,113,113,.35)" : "rgba(255,255,255,.16)";
                 toast.classList.add("show");
-                setTimeout(() => toast.classList.remove("show"), 1200);
+                setTimeout(() => toast.classList.remove("show"), 1400);
             }
 
             async function postJSON(url, data) {
@@ -992,6 +1133,12 @@
                 document.querySelectorAll(".teamRow").forEach(row => row.classList.remove("active-bid", "dimmed"));
                 document.querySelectorAll(".bidBtn").forEach(b => b.disabled = false);
 
+                // Re-enable action buttons (unless restricted by lot rules)
+                auctionCompleted = false;
+                auctionFullyCompleted = false;
+                completionCelebrated = false;
+                updateLotRestrictions();
+
                 // IMPORTANT: keep next-bid UX in sync if you’re using currentBid/basePrice logic
                 // If you are using currentBid=0 model, set it here accordingly:
                 if (typeof currentBid !== "undefined") {
@@ -1011,6 +1158,19 @@
                 }
 
                 showToast(`Next lot loaded: #${n.lot_no}`);
+            }
+
+            async function loadNextLotSafe() {
+                try {
+                    await loadNextLot();
+                } catch (e) {
+                    const msg = (e && e.message) ? e.message : "";
+                    if ((msg || "").toLowerCase().includes("no pending lots")) {
+                        handleAuctionCompleted(auctionFullyCompleted);
+                        return;
+                    }
+                    showToast(msg || "No pending lots remaining", true);
+                }
             }
 
             async function getJSON(url) {
@@ -1057,9 +1217,12 @@
             // ---- Update BID buttons based on rules ----
             function updateBidButtons() {
                 const next = getNextBid(currentBid, basePrice);
+                const minPerPlayer = 10000; // 10k minimum base price assumption
 
                 document.querySelectorAll(".teamRow").forEach(row => {
                     const purse = Number(row.dataset.purse || 0);
+                    const maxPlayers = Number(row.dataset.max || 0);
+                    const currentPlayers = Number(row.dataset.players || 0);
                     const btn = row.querySelector(".bidBtn");
 
                     if (!btn) return;
@@ -1074,15 +1237,35 @@
                       </div>
                     `;
 
-                    // Disable if purse insufficient
-                    if (purse < next.amount) {
-                      btn.disabled = true;
-                      btn.title = "Insufficient purse";
-                      row.classList.add("dimmed");
+                    let disabledReason = "";
+
+                    if (maxPlayers > 0) {
+                        if (currentPlayers >= maxPlayers) {
+                            disabledReason = `Max players reached (${currentPlayers}/${maxPlayers})`;
+                        } else {
+                            const remainingAfterPurchase = Math.max(maxPlayers - (currentPlayers + 1), 0);
+                            const reserveRequired = remainingAfterPurchase * minPerPlayer;
+                            const requiredTotal = next.amount + reserveRequired;
+
+                            if (purse < requiredTotal) {
+                                disabledReason = `Need ${formatINR(requiredTotal)} purse (bid ${formatINR(next.amount)} + reserve ${formatINR(reserveRequired)} for ${remainingAfterPurchase} remaining players)`;
+                            }
+                        }
                     } else {
-                      btn.disabled = false;
-                      btn.title = "";
-                      row.classList.remove("dimmed");
+                        // Fallback: only check the bid itself
+                        if (purse < next.amount) {
+                            disabledReason = "Insufficient purse";
+                        }
+                    }
+
+                    if (disabledReason) {
+                        btn.disabled = true;
+                        btn.title = disabledReason;
+                        row.classList.add("dimmed");
+                    } else {
+                        btn.disabled = false;
+                        btn.title = "";
+                        row.classList.remove("dimmed");
                     }
                 });
             }
@@ -1090,6 +1273,13 @@
 
             updateBidButtons();
             refreshBidHistory();
+            updateLotRestrictions();
+
+            if (auctionCompleted && auctionFullyCompleted) {
+                setTimeout(() => {
+                    handleAuctionCompleted(true);
+                }, 300);
+            }
 
             // Place bid
             document.querySelectorAll(".bidBtn").forEach(btn => {
@@ -1188,8 +1378,15 @@
                     }
 
                     document.querySelectorAll(".bidBtn").forEach(b => b.disabled = true);
+
+                    if (out.auction_completed) {
+                        handleAuctionCompleted(out.auction_fully_completed);
+                        refreshBidHistory();
+                        return;
+                    }
+
                     setTimeout(() => {
-                      loadNextLot().catch(e => showToast(e.message || "No pending lots remaining", true));
+                        loadNextLotSafe();
                     }, 500);
                     refreshBidHistory();
                 } catch (e) {
@@ -1206,8 +1403,15 @@
                     const out = await postJSON(`/auction/${getLotId()}/mark_unsold/`, {});
                     showToast("Marked UNSOLD");
                     document.querySelectorAll(".bidBtn").forEach(b => b.disabled = true);
+
+                    if (out.auction_completed) {
+                        handleAuctionCompleted(out.auction_fully_completed);
+                        refreshBidHistory();
+                        return;
+                    }
+
                     setTimeout(() => {
-                      loadNextLot().catch(e => showToast(e.message || "No pending lots remaining", true));
+                        loadNextLotSafe();
                     }, 700);
                     refreshBidHistory();
                 } catch (e) {
@@ -1285,7 +1489,7 @@
                         showToast(`Unsold round started: ${out.reopened} players relisted ✅`);
                         // Load next lot immediately (now PENDING exists again)
                         setTimeout(() => {
-                            loadNextLot().catch(e => showToast(e.message || "No pending lots", true));
+                            loadNextLotSafe();
                         }, 600);
                     } else {
                         showToast("No unsold players to relist.", true);
