@@ -85,7 +85,31 @@ def _get_highest_sold_lot(auction: Auction):
     )
 
 
+def _assigned_player_ids_qs(tournament: Tournament):
+    return (
+        TeamPlayer.objects.filter(tournament=tournament)
+        .exclude(status=TeamPlayer.Status.RELEASED)
+        .values_list("player_id", flat=True)
+    )
+
+
+def _withdraw_open_lots_for_assigned_players(auction: Auction) -> int:
+    """If a player is already assigned to a team, they should not be auctioned."""
+
+    assigned_player_ids = _assigned_player_ids_qs(auction.tournament)
+
+    return AuctionLot.objects.filter(
+        auction=auction,
+        player_id__in=assigned_player_ids,
+    ).exclude(
+        status__in=[AuctionLot.Status.SOLD, AuctionLot.Status.WITHDRAWN]
+    ).update(status=AuctionLot.Status.WITHDRAWN)
+
+
 def _auto_complete_auction_if_done(auction):
+    # Keep data consistent: players assigned to teams must not remain open in auction.
+    _withdraw_open_lots_for_assigned_players(auction)
+
     open_exists = AuctionLot.objects.filter(
         auction=auction,
         status__in=[AuctionLot.Status.PENDING, AuctionLot.Status.RUNNING],
@@ -205,7 +229,13 @@ def auction_screen(request, slug: str):
     highest_sold = None
     auction_completed = False
     auction_fully_completed = False
+    sold_total = 0
+    unsold_total = 0
+
     if auction:
+        # Keep auction consistent with team assignments (retained players should never come up for bidding).
+        _withdraw_open_lots_for_assigned_players(auction)
+
         # Prefer an in-progress RUNNING lot (so refresh resumes the same player)
         current_lot = (
             AuctionLot.objects.filter(auction=auction, status=AuctionLot.Status.RUNNING)
@@ -259,6 +289,16 @@ def auction_screen(request, slug: str):
                 "lot_no": top_sold.lot_no,
             }
 
+        sold_total = AuctionLot.objects.filter(auction=auction, status=AuctionLot.Status.SOLD).count()
+        unsold_total = AuctionLot.objects.filter(
+            auction=auction,
+            status__in=[
+                AuctionLot.Status.PENDING,
+                AuctionLot.Status.RUNNING,
+                AuctionLot.Status.UNSOLD,
+            ],
+        ).count()
+
     bid_timer_seconds = int(getattr(settings, "BID_TIMER_IN_SECONDS", 0) or 0)
     appearance_no = _appearance_no(current_lot) if current_lot else None
 
@@ -275,6 +315,8 @@ def auction_screen(request, slug: str):
             "bid_timer_seconds": bid_timer_seconds,
             "auction_completed": auction_completed,
             "auction_fully_completed": auction_fully_completed,
+            "sold_total": sold_total,
+            "unsold_total": unsold_total,
         },
     )
 
@@ -295,6 +337,18 @@ def place_bid(request, lot_id: int):
 
     if lot.status not in [AuctionLot.Status.PENDING, AuctionLot.Status.RUNNING]:
         return JsonResponse({"ok": False, "error": "Lot is not open for bidding."}, status=400)
+
+    # Safety: if player is already assigned to a team (retained), withdraw lot and block bidding.
+    assigned_exists = (
+        TeamPlayer.objects.filter(tournament=lot.auction.tournament, player_id=lot.player_id)
+        .exclude(status=TeamPlayer.Status.RELEASED)
+        .exists()
+    )
+    if assigned_exists:
+        AuctionLot.objects.filter(pk=lot.pk).exclude(
+            status__in=[AuctionLot.Status.SOLD, AuctionLot.Status.WITHDRAWN]
+        ).update(status=AuctionLot.Status.WITHDRAWN)
+        return JsonResponse({"ok": False, "error": "Player is already assigned to a team."}, status=400)
 
     try:
         payload = json.loads(request.body.decode("utf-8"))
@@ -411,6 +465,18 @@ def mark_sold(request, lot_id: int):
     if lot.status in [AuctionLot.Status.SOLD, AuctionLot.Status.UNSOLD, AuctionLot.Status.WITHDRAWN]:
         return JsonResponse({"ok": False, "error": "Lot already closed."}, status=400)
 
+    # Safety: don't allow selling a player that is already assigned/retained.
+    assigned_exists = (
+        TeamPlayer.objects.filter(tournament=lot.auction.tournament, player_id=lot.player_id)
+        .exclude(status=TeamPlayer.Status.RELEASED)
+        .exists()
+    )
+    if assigned_exists:
+        AuctionLot.objects.filter(pk=lot.pk).exclude(
+            status__in=[AuctionLot.Status.SOLD, AuctionLot.Status.WITHDRAWN]
+        ).update(status=AuctionLot.Status.WITHDRAWN)
+        return JsonResponse({"ok": False, "error": "Player is already assigned to a team."}, status=400)
+
     with transaction.atomic():
         team = _get_highest_team(lot)
         if not team:
@@ -476,6 +542,16 @@ def mark_sold(request, lot_id: int):
             "price": str(top_sold.sold_price or 0),
         }
 
+    sold_total = AuctionLot.objects.filter(auction=lot.auction, status=AuctionLot.Status.SOLD).count()
+    unsold_total = AuctionLot.objects.filter(
+        auction=lot.auction,
+        status__in=[
+            AuctionLot.Status.PENDING,
+            AuctionLot.Status.RUNNING,
+            AuctionLot.Status.UNSOLD,
+        ],
+    ).count()
+
     return JsonResponse(
         {
             "ok": True,
@@ -486,6 +562,7 @@ def mark_sold(request, lot_id: int):
             "auction_completed": done,
             "auction_fully_completed": fully_done,
             "highest_sold": highest_sold,
+            "counts": {"sold": sold_total, "unsold": unsold_total},
         }
     )
 
@@ -501,6 +578,18 @@ def mark_unsold(request, lot_id: int):
 
     if lot.status in [AuctionLot.Status.SOLD, AuctionLot.Status.UNSOLD, AuctionLot.Status.WITHDRAWN]:
         return JsonResponse({"ok": False, "error": "Lot already closed."}, status=400)
+
+    # Safety: if player is already assigned/retained, withdraw and block marking UNSOLD.
+    assigned_exists = (
+        TeamPlayer.objects.filter(tournament=lot.auction.tournament, player_id=lot.player_id)
+        .exclude(status=TeamPlayer.Status.RELEASED)
+        .exists()
+    )
+    if assigned_exists:
+        AuctionLot.objects.filter(pk=lot.pk).exclude(
+            status__in=[AuctionLot.Status.SOLD, AuctionLot.Status.WITHDRAWN]
+        ).update(status=AuctionLot.Status.WITHDRAWN)
+        return JsonResponse({"ok": False, "error": "Player is already assigned to a team."}, status=400)
 
     lot.status = AuctionLot.Status.UNSOLD
     lot.save(update_fields=["status", "updated_at"])
@@ -548,6 +637,9 @@ def next_lot(request, lot_id: int):
 
     if not can_manage_tournament(request.user, lot.auction.tournament):
         return JsonResponse({"ok": False, "error": "Forbidden"}, status=403)
+
+    # Keep auction consistent with team assignments
+    _withdraw_open_lots_for_assigned_players(lot.auction)
 
     qs = (
         AuctionLot.objects.filter(auction=lot.auction, status=AuctionLot.Status.PENDING)
@@ -621,6 +713,83 @@ def lot_bids(request, lot_id: int):
         )
 
     return JsonResponse({"ok": True, "lot_id": lot.id, "bids": data})
+
+
+@login_required
+@require_GET
+def auction_sold_list(request, auction_id: int):
+    auction = get_object_or_404(Auction.objects.select_related("tournament"), pk=auction_id)
+
+    if not can_manage_tournament(request.user, auction.tournament):
+        return JsonResponse({"ok": False, "error": "Forbidden"}, status=403)
+
+    q = (request.GET.get("q") or "").strip()
+
+    ordered_ids = list(
+        AuctionLot.objects.filter(auction=auction)
+        .order_by("lot_no", "lot_order", "id")
+        .values_list("id", flat=True)
+    )
+    entry_map = {lot_id: idx for idx, lot_id in enumerate(ordered_ids, start=1)}
+
+    qs = (
+        AuctionLot.objects.filter(auction=auction, status=AuctionLot.Status.SOLD)
+        .select_related("player", "sold_to_team")
+        .order_by("lot_no", "lot_order", "id")
+    )
+
+    if q:
+        qs = qs.filter(Q(player__name__icontains=q) | Q(sold_to_team__name__icontains=q))
+
+    rows = []
+    for lot in qs:
+        rows.append(
+            {
+                "lot_id": lot.id,
+                "lot_no": lot.lot_no,
+                "entry_no": entry_map.get(lot.id) or "",
+                "name": lot.player.name,
+                "team": lot.sold_to_team.name if lot.sold_to_team_id else "",
+                "price": str(lot.sold_price or 0),
+            }
+        )
+
+    return JsonResponse({"ok": True, "rows": rows})
+
+
+@login_required
+@require_GET
+def auction_unsold_list(request, auction_id: int):
+    """UNSOLD + upcoming (PENDING/RUNNING) players."""
+
+    auction = get_object_or_404(Auction.objects.select_related("tournament"), pk=auction_id)
+
+    if not can_manage_tournament(request.user, auction.tournament):
+        return JsonResponse({"ok": False, "error": "Forbidden"}, status=403)
+
+    q = (request.GET.get("q") or "").strip()
+
+    assigned_player_ids = _assigned_player_ids_qs(auction.tournament)
+
+    qs = (
+        AuctionLot.objects.filter(
+            auction=auction,
+            status__in=[
+                AuctionLot.Status.PENDING,
+                AuctionLot.Status.RUNNING,
+                AuctionLot.Status.UNSOLD,
+            ],
+        )
+        .exclude(player_id__in=assigned_player_ids)
+        .select_related("player")
+        .order_by("lot_no", "lot_order", "id")
+    )
+
+    if q:
+        qs = qs.filter(player__name__icontains=q)
+
+    rows = [{"name": lot.player.name} for lot in qs]
+    return JsonResponse({"ok": True, "rows": rows})
 
 
 @login_required
@@ -727,8 +896,15 @@ def reopen_unsold(request, auction_id: int):
     if not can_manage_tournament(request.user, auction.tournament):
         return JsonResponse({"ok": False, "error": "Forbidden"}, status=403)
 
+    # Keep auction consistent with team assignments
+    _withdraw_open_lots_for_assigned_players(auction)
+
     # Reopen UNSOLD lots back to PENDING
-    qs = AuctionLot.objects.filter(auction=auction, status=AuctionLot.Status.UNSOLD)
+    assigned_player_ids = _assigned_player_ids_qs(auction.tournament)
+
+    qs = AuctionLot.objects.filter(auction=auction, status=AuctionLot.Status.UNSOLD).exclude(
+        player_id__in=assigned_player_ids
+    )
     unsold_ids = list(qs.values_list("id", flat=True))
 
     reopened = qs.update(status=AuctionLot.Status.PENDING)

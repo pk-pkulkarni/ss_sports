@@ -2,7 +2,7 @@ import random
 
 from django.db import models, transaction
 
-from .models import Auction, AuctionLot, Player
+from .models import Auction, AuctionLot, Player, TeamPlayer
 
 
 def generate_lots_from_active_players(auction: Auction) -> tuple[int, int]:
@@ -11,6 +11,7 @@ def generate_lots_from_active_players(auction: Auction) -> tuple[int, int]:
 
     - Uses sequential lot_no after the current max lot_no.
     - Skips players that already have lots in this auction.
+    - Skips players already assigned to a team (TeamPlayer) in this tournament.
 
     Returns: (created_count, skipped_count)
     """
@@ -19,6 +20,12 @@ def generate_lots_from_active_players(auction: Auction) -> tuple[int, int]:
 
     existing_player_ids = set(
         AuctionLot.objects.filter(auction=auction).values_list("player_id", flat=True)
+    )
+
+    assigned_player_ids = set(
+        TeamPlayer.objects.filter(tournament=tournament)
+        .exclude(status=TeamPlayer.Status.RELEASED)
+        .values_list("player_id", flat=True)
     )
 
     max_lot_no = (
@@ -37,7 +44,7 @@ def generate_lots_from_active_players(auction: Auction) -> tuple[int, int]:
     skipped = 0
 
     for p in active_players:
-        if p.id in existing_player_ids:
+        if p.id in existing_player_ids or p.id in assigned_player_ids:
             skipped += 1
             continue
 
@@ -84,6 +91,7 @@ def generate_random_lots_from_active_players(
     - If reset=True, existing lots (and bids) for this auction are deleted.
     - Players are shuffled and assigned in round-robin across lot_no 1..N.
     - Each lot gets a randomized lot_order.
+    - Players already assigned to a team (TeamPlayer) in this tournament are excluded.
 
     Returns: (created_count, skipped_count)
     """
@@ -96,22 +104,36 @@ def generate_random_lots_from_active_players(
         AuctionLot.objects.filter(auction=auction).values_list("player_id", flat=True)
     )
 
+    assigned_player_ids = set(
+        TeamPlayer.objects.filter(tournament=tournament)
+        .exclude(status=TeamPlayer.Status.RELEASED)
+        .values_list("player_id", flat=True)
+    )
+
     players = list(Player.objects.filter(tournament=tournament, is_active=True))
     if not players:
         return 0, 0
 
     random.shuffle(players)
 
-    lot_count = min(max_lots, max(1, len(players)))
+    # Filter eligible players and count skipped (already have lots OR already assigned to a team)
+    eligible = []
+    skipped = 0
+    for p in players:
+        if p.id in existing_player_ids or p.id in assigned_player_ids:
+            skipped += 1
+            continue
+        eligible.append(p)
+
+    if not eligible:
+        return 0, skipped
+
+    lot_count = min(max_lots, max(1, len(eligible)))
     lot_numbers = list(range(1, lot_count + 1))
 
     # Round-robin distribution
     buckets = {n: [] for n in lot_numbers}
-    skipped = 0
-    for idx, p in enumerate(players):
-        if p.id in existing_player_ids:
-            skipped += 1
-            continue
+    for idx, p in enumerate(eligible):
         lot_no = lot_numbers[idx % lot_count]
         buckets[lot_no].append(p)
 

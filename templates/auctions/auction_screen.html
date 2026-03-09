@@ -225,6 +225,70 @@
             background: rgba(34, 197, 94, .18);
         }
 
+        /* Left panel tabs */
+        .leftTabs {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .tabPill {
+            border: 1px solid rgba(255, 255, 255, .18);
+            background: rgba(255, 255, 255, .06);
+            color: rgba(243, 247, 255, .92);
+            font-weight: 950;
+            border-radius: 999px;
+            padding: .40rem .85rem;
+            cursor: pointer;
+        }
+
+        .tabPill:hover {
+            background: rgba(255, 255, 255, .09);
+        }
+
+        .tabPill.active {
+            border-color: rgba(56, 189, 248, .55);
+            background: linear-gradient(90deg, rgba(34, 197, 94, .18), rgba(56, 189, 248, .14));
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, .12);
+        }
+
+        .tabSearch {
+            background: rgba(255, 255, 255, .06);
+            border: 1px solid rgba(255, 255, 255, .16);
+            color: var(--text);
+            border-radius: 14px;
+            padding: .55rem .8rem;
+            outline: none;
+            min-width: 240px;
+        }
+
+        .tabSearch::placeholder {
+            color: rgba(243, 247, 255, .55);
+        }
+
+        .tabSearch:focus {
+            border-color: rgba(56, 189, 248, .45);
+            box-shadow: 0 0 0 4px rgba(56, 189, 248, .12);
+        }
+
+        .leftTabPanel {
+            min-width: 0;
+        }
+
+        .tabTableWrap {
+            border: 1px solid rgba(255, 255, 255, .14);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, .04);
+            overflow: hidden;
+        }
+
+        .tabTableScroll {
+            max-height: 520px;
+            overflow: auto;
+        }
+
         .teamsHeader {
             display: flex;
             align-items: center;
@@ -565,10 +629,19 @@
 
         <div class="screen">
             <!-- LEFT: Current lot / player -->
-            <div class="panel">
-                <div class="sold-ribbon" id="soldRibbon">
-                    SOLD
+            <div class="panel" id="auctionLeftPanel">
+                <div id="auctionData" data-auction-id="{{ auction.id }}"></div>
+
+                <div class="leftTabs" id="leftTabs">
+                    <button type="button" class="tabPill active" data-left-tab="auction">Auction</button>
+                    <button type="button" class="tabPill" data-left-tab="sold">Sold <span id="soldPillCount">({{ sold_total|default:0 }})</span></button>
+                    <button type="button" class="tabPill" data-left-tab="unsold">Unsold <span id="unsoldPillCount">({{ unsold_total|default:0 }})</span></button>
                 </div>
+
+                <div id="leftTabAuction" class="leftTabPanel">
+                    <div class="sold-ribbon" id="soldRibbon">
+                        SOLD
+                    </div>
 {#                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">#}
 {#                    <div>#}
 {#                        <div class="chip">Auction Code: <strong class="ms-1">{{ auction.code }}</strong></div>#}
@@ -730,7 +803,60 @@
                     </div>
 
                 {% endif %}
-        </div>
+                </div>
+
+                <div id="leftTabSold" class="leftTabPanel" style="display:none;">
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                        <div style="font-weight:950;">Sold Players</div>
+                        <input type="text" id="soldSearch" class="tabSearch" placeholder="Search sold players…" />
+                    </div>
+
+                    <div class="tabTableWrap">
+                        <div class="tabTableScroll">
+                            <table class="table table-sports table-sm align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th style="width:10%;">Lot</th>
+                                        <th style="width:12%;">Entry</th>
+                                        <th style="width:34%;">Name</th>
+                                        <th style="width:26%;">Team</th>
+                                        <th style="width:18%;" class="text-end">Price</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="soldTbody">
+                                    <tr><td colspan="5" class="muted">Open the Sold tab to load…</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="muted mt-2" id="soldCount"></div>
+                </div>
+
+                <div id="leftTabUnsold" class="leftTabPanel" style="display:none;">
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                        <div style="font-weight:950;">Unsold / Upcoming</div>
+                        <input type="text" id="unsoldSearch" class="tabSearch" placeholder="Search players…" />
+                    </div>
+
+                    <div class="tabTableWrap">
+                        <div class="tabTableScroll">
+                            <table class="table table-sports table-sm align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="unsoldTbody">
+                                    <tr><td class="muted">Open the Unsold tab to load…</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="muted mt-2" id="unsoldCount"></div>
+                </div>
+            </div>
 
         <!-- RIGHT: Teams / bidding panel -->
         <div class="panel">
@@ -1376,6 +1502,14 @@
                     showToast(
                         `SOLD to ${out.sold_to.name} for ₹ ${Number(out.sold_price).toLocaleString("en-IN")}`
                     );
+
+                    // Refresh Sold/Unsold pill counters
+                    if (out.counts) {
+                        const soldPill = document.getElementById("soldPillCount");
+                        const unsoldPill = document.getElementById("unsoldPillCount");
+                        if (soldPill) soldPill.textContent = `(${out.counts.sold ?? 0})`;
+                        if (unsoldPill) unsoldPill.textContent = `(${out.counts.unsold ?? 0})`;
+                    }
                     const ribbon = document.getElementById("soldRibbon");
                     if(ribbon){
                       ribbon.classList.add("show");
@@ -1422,6 +1556,7 @@
                     }
 
                     document.querySelectorAll(".bidBtn").forEach(b => b.disabled = true);
+                    document.dispatchEvent(new CustomEvent("auction:lists-dirty"));
 
                     if (out.auction_completed) {
                         handleAuctionCompleted(out.auction_fully_completed);
@@ -1447,6 +1582,7 @@
                     const out = await postJSON(`/auction/${getLotId()}/mark_unsold/`, {});
                     showToast("Marked UNSOLD");
                     document.querySelectorAll(".bidBtn").forEach(b => b.disabled = true);
+                    document.dispatchEvent(new CustomEvent("auction:lists-dirty"));
 
                     if (out.auction_completed) {
                         handleAuctionCompleted(out.auction_fully_completed);
@@ -1529,6 +1665,7 @@
             document.getElementById("startUnsoldRound")?.addEventListener("click", async () => {
                 try {
                     const out = await postJSON(`/auction/{{ auction.id }}/reopen_unsold/`, {});
+                    document.dispatchEvent(new CustomEvent("auction:lists-dirty"));
                     if (out.reopened > 0) {
                         showToast(`Unsold round started: ${out.reopened} players relisted ✅`);
                         // Load next lot immediately (now PENDING exists again)
@@ -1610,6 +1747,210 @@
             document.getElementById("sBowlSub").textContent =
                 `Overs: ${safeVal(stats.overs)} • Eco: ${safeVal(stats.eco)}`;
         }
+
+        // ------------------ Left-panel tabs (Auction / Sold / Unsold) ------------------
+        (function () {
+            const tabs = document.getElementById("leftTabs");
+            const dataEl = document.getElementById("auctionData");
+            const auctionPanel = document.getElementById("leftTabAuction");
+            const soldPanel = document.getElementById("leftTabSold");
+            const unsoldPanel = document.getElementById("leftTabUnsold");
+
+            if (!tabs || !dataEl || !auctionPanel || !soldPanel || !unsoldPanel) return;
+
+            const auctionId = dataEl.dataset.auctionId;
+            if (!auctionId) return;
+
+            const buttons = Array.from(tabs.querySelectorAll("[data-left-tab]"));
+            const panels = {
+                auction: auctionPanel,
+                sold: soldPanel,
+                unsold: unsoldPanel,
+            };
+
+            const soldSearch = document.getElementById("soldSearch");
+            const unsoldSearch = document.getElementById("unsoldSearch");
+            const soldTbody = document.getElementById("soldTbody");
+            const unsoldTbody = document.getElementById("unsoldTbody");
+            const soldCount = document.getElementById("soldCount");
+            const unsoldCount = document.getElementById("unsoldCount");
+
+            let activeTab = "auction";
+            const dirty = {sold: true, unsold: true};
+
+            function debounce(fn, delay) {
+                let t = null;
+                return (...args) => {
+                    if (t) clearTimeout(t);
+                    t = setTimeout(() => fn(...args), delay);
+                };
+            }
+
+            function setActive(tab) {
+                activeTab = tab;
+
+                for (const b of buttons) {
+                    b.classList.toggle("active", b.dataset.leftTab === tab);
+                }
+
+                for (const [k, el] of Object.entries(panels)) {
+                    el.style.display = (k === tab) ? "" : "none";
+                }
+
+                if (tab === "sold") refreshSold();
+                if (tab === "unsold") refreshUnsold();
+            }
+
+            async function fetchJSON(url) {
+                const res = await fetch(url, {
+                    method: "GET",
+                    headers: {"X-Requested-With": "XMLHttpRequest"},
+                });
+                const out = await res.json().catch(() => ({}));
+                if (!res.ok || out.ok === false) {
+                    throw new Error(out.error || "Request failed");
+                }
+                return out;
+            }
+
+            function clearChildren(el) {
+                if (!el) return;
+                while (el.firstChild) el.removeChild(el.firstChild);
+            }
+
+            function td(txt, cls = "") {
+                const d = document.createElement("td");
+                if (cls) d.className = cls;
+                d.textContent = txt;
+                return d;
+            }
+
+            function showSoldMessage(msg) {
+                if (!soldTbody) return;
+                soldTbody.innerHTML = `<tr><td colspan="5" class="muted">${msg}</td></tr>`;
+            }
+
+            function showUnsoldMessage(msg) {
+                if (!unsoldTbody) return;
+                unsoldTbody.innerHTML = `<tr><td class="muted">${msg}</td></tr>`;
+            }
+
+            async function refreshSold(force = false) {
+                if (!soldTbody) return;
+                if (!force && !dirty.sold) return;
+
+                dirty.sold = false;
+                showSoldMessage("Loading…");
+
+                const q = (soldSearch?.value || "").trim();
+                const url = `/auction/${auctionId}/sold/?q=${encodeURIComponent(q)}`;
+
+                try {
+                    const out = await fetchJSON(url);
+                    const rows = out.rows || [];
+
+                    if (!rows.length) {
+                        showSoldMessage(q ? "No matches." : "No sold players yet.");
+                        if (soldCount) soldCount.textContent = "";
+                        return;
+                    }
+
+                    clearChildren(soldTbody);
+                    const frag = document.createDocumentFragment();
+
+                    for (const r of rows) {
+                        const tr = document.createElement("tr");
+                        tr.appendChild(td(String(r.lot_no ?? "")));
+                        tr.appendChild(td(String(r.entry_no ?? "")));
+                        tr.appendChild(td(String(r.name ?? "")));
+                        tr.appendChild(td(String(r.team ?? "")));
+                        tr.appendChild(td(formatINR(r.price ?? 0), "text-end"));
+                        frag.appendChild(tr);
+                    }
+
+                    soldTbody.appendChild(frag);
+                    if (soldCount) {
+                        soldCount.textContent = `Showing ${rows.length} sold player${rows.length === 1 ? "" : "s"}.`;
+                    }
+                } catch (e) {
+                    dirty.sold = true;
+                    showSoldMessage((e && e.message) ? e.message : "Failed to load.");
+                }
+            }
+
+            async function refreshUnsold(force = false) {
+                if (!unsoldTbody) return;
+                if (!force && !dirty.unsold) return;
+
+                dirty.unsold = false;
+                showUnsoldMessage("Loading…");
+
+                const q = (unsoldSearch?.value || "").trim();
+                const url = `/auction/${auctionId}/unsold/?q=${encodeURIComponent(q)}`;
+
+                try {
+                    const out = await fetchJSON(url);
+                    const rows = out.rows || [];
+
+                    if (!rows.length) {
+                        showUnsoldMessage(q ? "No matches." : "No UNSOLD / upcoming players.");
+                        if (unsoldCount) unsoldCount.textContent = "";
+                        return;
+                    }
+
+                    clearChildren(unsoldTbody);
+                    const frag = document.createDocumentFragment();
+
+                    for (const r of rows) {
+                        const tr = document.createElement("tr");
+                        tr.appendChild(td(String(r.name ?? "")));
+                        frag.appendChild(tr);
+                    }
+
+                    unsoldTbody.appendChild(frag);
+                    if (unsoldCount) {
+                        unsoldCount.textContent = `Showing ${rows.length} player${rows.length === 1 ? "" : "s"}.`;
+                    }
+                } catch (e) {
+                    dirty.unsold = true;
+                    showUnsoldMessage((e && e.message) ? e.message : "Failed to load.");
+                }
+            }
+
+            tabs.addEventListener("click", (e) => {
+                const btn = e.target.closest("[data-left-tab]");
+                if (!btn) return;
+                e.preventDefault();
+                setActive(btn.dataset.leftTab);
+            });
+
+            soldSearch?.addEventListener(
+                "input",
+                debounce(() => {
+                    dirty.sold = true;
+                    if (activeTab === "sold") refreshSold(true);
+                }, 200)
+            );
+
+            unsoldSearch?.addEventListener(
+                "input",
+                debounce(() => {
+                    dirty.unsold = true;
+                    if (activeTab === "unsold") refreshUnsold(true);
+                }, 200)
+            );
+
+            document.addEventListener("auction:lists-dirty", () => {
+                dirty.sold = true;
+                dirty.unsold = true;
+
+                if (activeTab === "sold") refreshSold(true);
+                if (activeTab === "unsold") refreshUnsold(true);
+            });
+
+            // Make sure initial state matches markup
+            setActive("auction");
+        })();
 
     </script>
 
