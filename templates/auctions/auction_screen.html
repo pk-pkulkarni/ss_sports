@@ -707,6 +707,7 @@
                             <button class="btn btn-soft btn-danger-soft" id="markUnsold">Mark UNSOLD</button>
 {#                            <button class="btn btn-soft" id="nextLot">Next Lot</button>#}
                             <button class="btn btn-soft" id="startUnsoldRound">Start Unsold</button>
+                            <button class="btn btn-soft" id="endAuction">End Auction</button>
                         </div>
                     </div>
 
@@ -1205,10 +1206,53 @@
                 }).join("");
             }
 
+            function applyTopBidState(bids) {
+                bids = Array.isArray(bids) ? bids : [];
+
+                if (!bids.length) {
+                    currentBid = 0;
+                    bidAmtEl.textContent = formatINR(basePrice);
+                    bidTeamEl.textContent = "No bids yet";
+
+                    document.querySelectorAll(".teamRow").forEach(row => {
+                        row.classList.remove("active-bid", "dimmed");
+                    });
+
+                    updateBidButtons();
+                    return;
+                }
+
+                const top = bids[0] || {};
+                const topAmt = Number(top.amount || 0) || 0;
+                const topTeamId = top.team && top.team.id ? String(top.team.id) : null;
+                const topTeamName = top.team && top.team.name ? top.team.name : "";
+
+                currentBid = topAmt;
+                bidAmtEl.textContent = formatINR(topAmt);
+                bidTeamEl.textContent = topTeamName ? `Highest: ${topTeamName}` : "Highest bid";
+
+                // Keep next-bid UX in sync
+                updateBidButtons();
+
+                // Highlight current highest team
+                document.querySelectorAll(".teamRow").forEach(row => {
+                    if (topTeamId && row.dataset.teamId === topTeamId) {
+                        row.classList.add("active-bid");
+                        row.classList.remove("dimmed");
+                    } else {
+                        row.classList.remove("active-bid");
+                        row.classList.add("dimmed");
+                    }
+                });
+
+            }
+
             async function refreshBidHistory() {
                 try {
                     const out = await getJSON(`/auction/${getLotId()}/bids/`);
-                    renderBids(out.bids || []);
+                    const bids = out.bids || [];
+                    renderBids(bids);
+                    applyTopBidState(bids);
                 } catch (e) {
                     // silent-ish failure
                 }
@@ -1496,6 +1540,28 @@
                     }
                 } catch (e) {
                     showToast(e.message || "Failed to start unsold round", true);
+                }
+            });
+
+            document.getElementById("endAuction")?.addEventListener("click", async () => {
+                try {
+                    if (!confirm("End auction now?")) return;
+
+                    stopBidTimer();
+                    await postJSON(`/auction/{{ auction.id }}/end/`, {});
+
+                    // Lock UI
+                    auctionCompleted = true;
+                    document.querySelectorAll(".bidBtn").forEach(b => b.disabled = true);
+                    updateLotRestrictions();
+
+                    showToast("Auction ended ✅");
+
+                    // Trigger the same completion UX (modal + confetti)
+                    showAuctionCompletedModal();
+                    fireConfetti();
+                } catch (e) {
+                    showToast(e.message || "Failed to end auction", true);
                 }
             });
 

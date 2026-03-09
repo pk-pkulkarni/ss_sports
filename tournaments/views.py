@@ -744,9 +744,9 @@ def export_teams_xlsx(request, slug: str):
 
     def safe_sheet_title(name: str) -> str:
         name = (name or "Team").strip() or "Team"
-        # Excel sheet title rules: max 31 chars and can't contain: : \ / ? * [ ]
-        name = re.sub(r"[:\\/\?\*\[\]]", " ", name)
-        name = re.sub(r"\s+", " ", name).strip()
+        # Excel sheet title rules: max 31 chars and can't contain: : \\ / ? * [ ]
+        name = re.sub(r"[:\\\\/\\?\\*\\[\\]]", " ", name)
+        name = re.sub(r"\\s+", " ", name).strip()
         return (name or "Team")[:31]
 
     for team in teams:
@@ -780,6 +780,152 @@ def export_teams_xlsx(request, slug: str):
     out.seek(0)
 
     filename = f"{tournament.slug}_teams.xlsx"
+    response = HttpResponse(
+        out.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required
+def export_players_xlsx(request, slug: str):
+    """Export all tournament players into a single XLSX sheet."""
+
+    try:
+        from openpyxl import Workbook
+        from openpyxl.utils import get_column_letter
+    except ImportError:
+        return HttpResponse(
+            "Export requires openpyxl. Install it with: pip install openpyxl",
+            status=500,
+            content_type="text/plain",
+        )
+
+    from io import BytesIO
+
+    tournament = get_object_or_404(_filter_tournament_qs(Tournament, request.user), slug=slug)
+
+    players = list(Player.objects.filter(tournament=tournament).order_by("name"))
+
+    auction = getattr(tournament, "auction", None)
+
+    lot_by_player_id = {}
+    if auction:
+        lots = (
+            AuctionLot.objects.filter(auction=auction)
+            .select_related("sold_to_team")
+            .order_by("lot_no", "lot_order", "id")
+        )
+        for lot in lots:
+            lot_by_player_id[lot.player_id] = lot
+
+    tp_by_player_id = {
+        tp.player_id: tp
+        for tp in TeamPlayer.objects.filter(tournament=tournament)
+        .select_related("team")
+        .order_by("player__name")
+    }
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Players"
+
+    headers = [
+        "Name",
+        # "Role",
+        # "City",
+        # "Age",
+        # "Phone",
+        # "Active",
+        # "Base Price",
+        # "Reserve Price",
+        # "Team",
+        # "Designation",
+        # "Lot No",
+        # "Lot Status",
+        # "Sold To",
+        # "Sold Price",
+        # "Batting Style",
+        # "Bowling Style",
+        # "Jersey No",
+        # "Jersey Name",
+        # "Jersey Size",
+        # "Notes",
+        # "Stats",
+    ]
+    ws.append(headers)
+
+    for p in players:
+        # lot = lot_by_player_id.get(p.id)
+        # tp = tp_by_player_id.get(p.id)
+        #
+        # stats_val = ""
+        # if p.stats:
+        #     try:
+        #         stats_val = json.dumps(p.stats, ensure_ascii=False)
+        #     except Exception:
+        #         stats_val = str(p.stats)
+
+        ws.append(
+            [
+                p.name,
+                # p.get_role_display() if p.role else "",
+                # p.city or "",
+                # p.age or "",
+                # p.phone or "",
+                # "Yes" if p.is_active else "No",
+                # p.base_price or 0,
+                # p.reserve_price or 0,
+                # tp.team.name if tp else "",
+                # tp.get_designation_display() if tp else "",
+                # lot.lot_no if lot else "",
+                # lot.get_status_display() if lot else "",
+                # lot.sold_to_team.name if lot and lot.sold_to_team_id else "",
+                # lot.sold_price if lot and lot.sold_price is not None else "",
+                # p.batting_style or "",
+                # p.bowling_style or "",
+                # p.jersey_no or "",
+                # p.jersey_name or "",
+                # p.jersey_size or "",
+                # p.notes or "",
+                # stats_val,
+            ]
+        )
+
+    # Basic formatting
+    ws.freeze_panes = "A2"
+    widths = [
+        28,  # Name
+        # 14,  # Role
+        # 18,  # City
+        # 8,   # Age
+        # 16,  # Phone
+        # 8,   # Active
+        # 12,  # Base
+        # 12,  # Reserve
+        # 20,  # Team
+        # 14,  # Designation
+        # 8,   # Lot No
+        # 14,  # Lot Status
+        # 20,  # Sold To
+        # 12,  # Sold Price
+        # 16,  # Batting
+        # 16,  # Bowling
+        # 10,  # Jersey No
+        # 14,  # Jersey Name
+        # 12,  # Jersey Size
+        # 26,  # Notes
+        # 44,  # Stats
+    ]
+    for idx, w in enumerate(widths, start=1):
+        ws.column_dimensions[get_column_letter(idx)].width = w
+
+    out = BytesIO()
+    wb.save(out)
+    out.seek(0)
+
+    filename = f"{tournament.slug}_players.xlsx"
     response = HttpResponse(
         out.getvalue(),
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

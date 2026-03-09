@@ -59,6 +59,7 @@ urlpatterns = [
     path("t/<slug:slug>/lots/move/", tournament_views.move_lot_player, name="move_lot_player"),
     path("t/<slug:slug>/teams-dashboard/", tournament_views.teams_dashboard, name="teams_dashboard"),
     path("t/<slug:slug>/teams-export/", tournament_views.export_teams_xlsx, name="teams_export_xlsx"),
+    path("t/<slug:slug>/players-export/", tournament_views.export_players_xlsx, name="players_export_xlsx"),
 
     # Auction screen (UI)
     path("t/<slug:slug>/auction/", auction_views.auction_screen, name="auction_screen"),
@@ -73,6 +74,7 @@ urlpatterns = [
     path("auction/<int:lot_id>/bids/", auction_views.lot_bids, name="lot_bids"),
     path("auction/<int:lot_id>/undo_last_bid/", auction_views.undo_last_bid, name="undo_last_bid"),
     path("auction/<int:auction_id>/reopen_unsold/", auction_views.reopen_unsold, name="reopen_unsold"),
+    path("auction/<int:auction_id>/end/", auction_views.end_auction, name="end_auction"),
 ]
 
 # Media files (DEV only)

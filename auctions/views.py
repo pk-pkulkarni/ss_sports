@@ -99,50 +99,6 @@ def _auto_complete_auction_if_done(auction):
     return False
 
 
-def _relist_lot1_unsold_if_needed(auction: Auction) -> int:
-    """
-    Lot #1 special rule:
-    - You CAN mark UNSOLD in Lot #1.
-    - Lot #1 must keep looping until every Lot #1 player is SOLD.
-
-    Implementation:
-    - If Lot #1 has UNSOLD lots but no currently open Lot #1 lots (PENDING/RUNNING),
-      move those UNSOLD lots back to PENDING.
-    - When relisting, invalidate previous valid bids so bidding starts fresh.
-
-    Returns the number of lots relisted.
-    """
-    lot1_open_exists = AuctionLot.objects.filter(
-        auction=auction,
-        lot_no=1,
-        status__in=[AuctionLot.Status.PENDING, AuctionLot.Status.RUNNING],
-    ).exists()
-    if lot1_open_exists:
-        return 0
-
-    lot1_unsold_ids = list(
-        AuctionLot.objects.filter(
-            auction=auction,
-            lot_no=1,
-            status=AuctionLot.Status.UNSOLD,
-        ).values_list("id", flat=True)
-    )
-    if not lot1_unsold_ids:
-        return 0
-
-    AuctionLot.objects.filter(id__in=lot1_unsold_ids).update(status=AuctionLot.Status.PENDING)
-
-    # Reset bid state for relisted lots (so next bid starts from base again)
-    Bid.objects.filter(lot_id__in=lot1_unsold_ids, is_valid=True).update(is_valid=False)
-
-    # If the auction was auto-closed, reopen it when we relist lots.
-    if auction.status == Auction.Status.CLOSED:
-        auction.status = Auction.Status.LIVE
-        auction.save(update_fields=["status", "updated_at"])
-
-    return len(lot1_unsold_ids)
-
-
 def _tournament_for_user(user, slug: str):
     qs = Tournament.objects.select_related("auction").prefetch_related("teams", "players")
     if not user.is_superuser:
@@ -250,52 +206,29 @@ def auction_screen(request, slug: str):
     auction_completed = False
     auction_fully_completed = False
     if auction:
-        # Lot #1 loop rule: if Lot #1 has only UNSOLD left, relist them now.
-        _relist_lot1_unsold_if_needed(auction)
+        # Prefer an in-progress RUNNING lot (so refresh resumes the same player)
+        current_lot = (
+            AuctionLot.objects.filter(auction=auction, status=AuctionLot.Status.RUNNING)
+            .select_related("player", "sold_to_team")
+            .order_by("lot_no", "lot_order", "id")
+            .first()
+        )
 
-        lot1_incomplete = AuctionLot.objects.filter(
-            auction=auction,
-            lot_no=1,
-            status__in=[
-                AuctionLot.Status.PENDING,
-                AuctionLot.Status.RUNNING,
-                AuctionLot.Status.UNSOLD,
-            ],
-        ).exists()
-
-        if lot1_incomplete:
-            current_lot = (
-                AuctionLot.objects.filter(
-                    auction=auction,
-                    lot_no=1,
-                    status=AuctionLot.Status.PENDING,
-                )
-                .select_related("player", "sold_to_team")
-                .order_by("lot_no", "lot_order", "id")
-                .first()
-            )
-            if not current_lot:
-                # Fallback (should be rare): show the first Lot #1 lot.
-                current_lot = (
-                    AuctionLot.objects.filter(auction=auction, lot_no=1)
-                    .select_related("player", "sold_to_team")
-                    .order_by("lot_no", "lot_order", "id")
-                    .first()
-                )
-        else:
+        if not current_lot:
             current_lot = (
                 AuctionLot.objects.filter(auction=auction, status=AuctionLot.Status.PENDING)
                 .select_related("player", "sold_to_team")
                 .order_by("lot_no", "lot_order", "id")
                 .first()
             )
-            if not current_lot:
-                current_lot = (
-                    AuctionLot.objects.filter(auction=auction)
-                    .select_related("player", "sold_to_team")
-                    .order_by("lot_no", "lot_order", "id")
-                    .first()
-                )
+
+        if not current_lot:
+            current_lot = (
+                AuctionLot.objects.filter(auction=auction)
+                .select_related("player", "sold_to_team")
+                .order_by("lot_no", "lot_order", "id")
+                .first()
+            )
 
         if current_lot and current_lot.status in [AuctionLot.Status.PENDING, AuctionLot.Status.RUNNING]:
             _ensure_lot_start_event(current_lot)
@@ -522,9 +455,6 @@ def mark_sold(request, lot_id: int):
             amount=sold_price,
         )
 
-        # Lot #1 loop rule: if Lot #1 is waiting on UNSOLD lots, relist them now.
-        _relist_lot1_unsold_if_needed(lot.auction)
-
         done = _auto_complete_auction_if_done(lot.auction)
         fully_done = not AuctionLot.objects.filter(
             auction=lot.auction,
@@ -584,9 +514,6 @@ def mark_unsold(request, lot_id: int):
         player=lot.player,
     )
 
-    # Lot #1 loop rule: relist Lot #1 UNSOLD lots back to PENDING when the round ends.
-    _relist_lot1_unsold_if_needed(lot.auction)
-
     done = _auto_complete_auction_if_done(lot.auction)
     fully_done = not AuctionLot.objects.filter(
         auction=lot.auction,
@@ -622,27 +549,10 @@ def next_lot(request, lot_id: int):
     if not can_manage_tournament(request.user, lot.auction.tournament):
         return JsonResponse({"ok": False, "error": "Forbidden"}, status=403)
 
-    # Lot #1 loop rule: if Lot #1 has only UNSOLD left, relist them now.
-    _relist_lot1_unsold_if_needed(lot.auction)
-
-    # Lot #1 restriction: cannot proceed to other lots until Lot #1 is fully SOLD.
-    lot1_incomplete = AuctionLot.objects.filter(
-        auction=lot.auction,
-        lot_no=1,
-        status__in=[
-            AuctionLot.Status.PENDING,
-            AuctionLot.Status.RUNNING,
-            AuctionLot.Status.UNSOLD,
-        ],
-    ).exists()
-
     qs = (
         AuctionLot.objects.filter(auction=lot.auction, status=AuctionLot.Status.PENDING)
         .select_related("player")
     )
-
-    if lot1_incomplete:
-        qs = qs.filter(lot_no=1)
 
     next_l = (
         qs.filter(
@@ -657,14 +567,6 @@ def next_lot(request, lot_id: int):
         next_l = qs.order_by("lot_no", "lot_order", "id").first()
 
     if not next_l:
-        if lot1_incomplete:
-            return JsonResponse(
-                {
-                    "ok": False,
-                    "error": "Lot #1 must be fully SOLD before moving ahead.",
-                },
-                status=400,
-            )
         return JsonResponse({"ok": False, "error": "No pending lots remaining."}, status=404)
 
     _ensure_lot_start_event(next_l)
@@ -777,6 +679,44 @@ def undo_last_bid(request, lot_id: int):
             },
         }
     )
+
+@login_required
+@require_POST
+@csrf_exempt
+def end_auction(request, auction_id: int):
+    auction = get_object_or_404(Auction.objects.select_related("tournament"), pk=auction_id)
+
+    if not can_manage_tournament(request.user, auction.tournament):
+        return JsonResponse({"ok": False, "error": "Forbidden"}, status=403)
+
+    # Mark auction closed (idempotent)
+    if auction.status != Auction.Status.CLOSED:
+        auction.status = Auction.Status.CLOSED
+        auction.save(update_fields=["status", "updated_at"])
+
+    open_exists = AuctionLot.objects.filter(
+        auction=auction,
+        status__in=[AuctionLot.Status.PENDING, AuctionLot.Status.RUNNING],
+    ).exists()
+
+    fully_done = not AuctionLot.objects.filter(
+        auction=auction,
+        status__in=[
+            AuctionLot.Status.PENDING,
+            AuctionLot.Status.RUNNING,
+            AuctionLot.Status.UNSOLD,
+        ],
+    ).exists()
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "status": auction.status,
+            "auction_completed": not open_exists,
+            "auction_fully_completed": fully_done,
+        }
+    )
+
 
 @login_required
 @require_POST
