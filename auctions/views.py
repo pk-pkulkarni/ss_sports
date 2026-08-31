@@ -13,6 +13,7 @@ from django.db.models import Q, Count
 from tournaments.models import Tournament
 from tournaments.permissions import can_manage_tournament
 from .models import AuctionLot, Bid, Team, TeamPlayer, Auction, AuctionEvent
+from .rules import PRICE_CAP_VALUES, normalize_auction_rules
 from .templatetags.inr import inr as inr_format
 
 
@@ -121,6 +122,128 @@ def _auto_complete_auction_if_done(auction):
             auction.save(update_fields=["status", "updated_at"])
         return True
     return False
+
+
+def _lot_rule_player_count(team: Team, auction: Auction, lot_no: int) -> int:
+    return (
+        TeamPlayer.objects.filter(
+            tournament=auction.tournament,
+            team=team,
+            player__lots__auction=auction,
+            player__lots__lot_no=lot_no,
+        )
+        .exclude(status=TeamPlayer.Status.RELEASED)
+        .distinct()
+        .count()
+    )
+
+
+def _price_cap_player_count(team: Team, auction: Auction, base_price: Decimal) -> int:
+    return (
+        TeamPlayer.objects.filter(
+            tournament=auction.tournament,
+            team=team,
+            player__base_price=base_price,
+        )
+        .exclude(status=TeamPlayer.Status.RELEASED)
+        .count()
+    )
+
+
+def _restricted_lot_is_incomplete(auction: Auction, lot_no: int) -> bool:
+    assigned_player_ids = _assigned_player_ids_qs(auction.tournament)
+    return (
+        AuctionLot.objects.filter(
+            auction=auction,
+            lot_no=lot_no,
+            status__in=[
+                AuctionLot.Status.PENDING,
+                AuctionLot.Status.RUNNING,
+                AuctionLot.Status.UNSOLD,
+            ],
+        )
+        .exclude(player_id__in=assigned_player_ids)
+        .exists()
+    )
+
+
+def _relist_unsold_lot_if_needed(auction: Auction, lot_no: int) -> int:
+    assigned_player_ids = _assigned_player_ids_qs(auction.tournament)
+    lot_open_exists = AuctionLot.objects.filter(
+        auction=auction,
+        lot_no=lot_no,
+        status__in=[AuctionLot.Status.PENDING, AuctionLot.Status.RUNNING],
+    ).exclude(player_id__in=assigned_player_ids).exists()
+    if lot_open_exists:
+        return 0
+
+    lot_unsold_ids = list(
+        AuctionLot.objects.filter(
+            auction=auction,
+            lot_no=lot_no,
+            status=AuctionLot.Status.UNSOLD,
+        ).exclude(player_id__in=assigned_player_ids).values_list("id", flat=True)
+    )
+    if not lot_unsold_ids:
+        return 0
+
+    AuctionLot.objects.filter(id__in=lot_unsold_ids).update(status=AuctionLot.Status.PENDING)
+    Bid.objects.filter(lot_id__in=lot_unsold_ids, is_valid=True).update(is_valid=False)
+
+    if auction.status == Auction.Status.CLOSED:
+        auction.status = Auction.Status.LIVE
+        auction.save(update_fields=["status", "updated_at"])
+
+    return len(lot_unsold_ids)
+
+
+def _active_restricted_lot(auction: Auction):
+    rules = normalize_auction_rules(auction)
+    if not rules["is_rule_based"]:
+        return None, rules
+
+    lot_sequence = []
+    if rules["rule_lot1_and_lot2_enabled"]:
+        lot_sequence = [1, 2]
+    elif rules["rule_lot1_enabled"]:
+        lot_sequence = [1]
+
+    for lot_no in lot_sequence:
+        if _restricted_lot_is_incomplete(auction, lot_no):
+            return lot_no, rules
+
+    return None, rules
+
+
+def _relist_restricted_unsold_if_needed(auction: Auction) -> int:
+    lot_no, _rules = _active_restricted_lot(auction)
+    if not lot_no:
+        return 0
+    return _relist_unsold_lot_if_needed(auction, lot_no)
+
+
+def _lot_rule_limit_for_current_lot(auction: Auction, lot: AuctionLot, rules: dict) -> int | None:
+    if lot.lot_no == 1 and (rules["rule_lot1_enabled"] or rules["rule_lot1_and_lot2_enabled"]):
+        return rules["lot1_players_per_team"]
+    if lot.lot_no == 2 and rules["rule_lot1_and_lot2_enabled"]:
+        return rules["lot2_players_per_team"]
+    return None
+
+
+def _validate_team_against_rules(auction: Auction, lot: AuctionLot, team: Team, rules: dict) -> str | None:
+    lot_limit = _lot_rule_limit_for_current_lot(auction, lot, rules)
+    if lot_limit:
+        lot_count = _lot_rule_player_count(team, auction, lot.lot_no)
+        if lot_count >= lot_limit:
+            return f"{team.name} already has the allowed {lot_limit} player(s) from Lot {lot.lot_no}."
+
+    if rules["rule_price_caps_enabled"] and int(lot.base_price_snapshot or 0) in PRICE_CAP_VALUES:
+        base_price = Decimal(lot.base_price_snapshot or 0)
+        cap_count = _price_cap_player_count(team, auction, base_price)
+        if cap_count >= 1:
+            return f"{team.name} already has a {int(base_price)} value player."
+
+    return None
 
 
 def _tournament_for_user(user, slug: str):
@@ -235,10 +358,16 @@ def auction_screen(request, slug: str):
     if auction:
         # Keep auction consistent with team assignments (retained players should never come up for bidding).
         _withdraw_open_lots_for_assigned_players(auction)
+        _relist_restricted_unsold_if_needed(auction)
+        restricted_lot_no, auction_rules_config = _active_restricted_lot(auction)
+
+        lot_scope = AuctionLot.objects.filter(auction=auction)
+        if restricted_lot_no:
+            lot_scope = lot_scope.filter(lot_no=restricted_lot_no)
 
         # Prefer an in-progress RUNNING lot (so refresh resumes the same player)
         current_lot = (
-            AuctionLot.objects.filter(auction=auction, status=AuctionLot.Status.RUNNING)
+            lot_scope.filter(status=AuctionLot.Status.RUNNING)
             .select_related("player", "sold_to_team")
             .order_by("lot_no", "lot_order", "id")
             .first()
@@ -246,7 +375,7 @@ def auction_screen(request, slug: str):
 
         if not current_lot:
             current_lot = (
-                AuctionLot.objects.filter(auction=auction, status=AuctionLot.Status.PENDING)
+                lot_scope.filter(status=AuctionLot.Status.PENDING)
                 .select_related("player", "sold_to_team")
                 .order_by("lot_no", "lot_order", "id")
                 .first()
@@ -254,7 +383,7 @@ def auction_screen(request, slug: str):
 
         if not current_lot:
             current_lot = (
-                AuctionLot.objects.filter(auction=auction)
+                lot_scope
                 .select_related("player", "sold_to_team")
                 .order_by("lot_no", "lot_order", "id")
                 .first()
@@ -298,6 +427,8 @@ def auction_screen(request, slug: str):
                 AuctionLot.Status.UNSOLD,
             ],
         ).count()
+    else:
+        auction_rules_config = normalize_auction_rules(None)
 
     bid_timer_seconds = int(getattr(settings, "BID_TIMER_IN_SECONDS", 0) or 0)
     appearance_no = _appearance_no(current_lot) if current_lot else None
@@ -317,6 +448,7 @@ def auction_screen(request, slug: str):
             "auction_fully_completed": auction_fully_completed,
             "sold_total": sold_total,
             "unsold_total": unsold_total,
+            "auction_rules_config": auction_rules_config,
         },
     )
 
@@ -357,6 +489,10 @@ def place_bid(request, lot_id: int):
         return JsonResponse({"ok": False, "error": "Invalid JSON payload."}, status=400)
 
     team = get_object_or_404(Team, pk=team_id, tournament=lot.auction.tournament, is_active=True)
+    rules = normalize_auction_rules(lot.auction)
+    rule_error = _validate_team_against_rules(lot.auction, lot, team, rules)
+    if rule_error:
+        return JsonResponse({"ok": False, "error": rule_error}, status=400)
 
     with transaction.atomic():
         # First bid should be exactly the base price.
@@ -483,6 +619,10 @@ def mark_sold(request, lot_id: int):
             return JsonResponse({"ok": False, "error": "No bids found. Can't mark SOLD."}, status=400)
 
         sold_price = _get_current_highest(lot)
+        rules = normalize_auction_rules(lot.auction)
+        rule_error = _validate_team_against_rules(lot.auction, lot, team, rules)
+        if rule_error:
+            return JsonResponse({"ok": False, "error": rule_error}, status=400)
 
         # purse check (if configured)
         if (team.purse_total or 0) > 0 and (team.purse_remaining or 0) < sold_price:
@@ -520,6 +660,7 @@ def mark_sold(request, lot_id: int):
             team=team,
             amount=sold_price,
         )
+        _relist_restricted_unsold_if_needed(lot.auction)
 
         done = _auto_complete_auction_if_done(lot.auction)
         fully_done = not AuctionLot.objects.filter(
@@ -603,6 +744,7 @@ def mark_unsold(request, lot_id: int):
         player=lot.player,
     )
 
+    _relist_restricted_unsold_if_needed(lot.auction)
     done = _auto_complete_auction_if_done(lot.auction)
     fully_done = not AuctionLot.objects.filter(
         auction=lot.auction,
@@ -640,11 +782,15 @@ def next_lot(request, lot_id: int):
 
     # Keep auction consistent with team assignments
     _withdraw_open_lots_for_assigned_players(lot.auction)
+    _relist_restricted_unsold_if_needed(lot.auction)
+    restricted_lot_no, _rules = _active_restricted_lot(lot.auction)
 
     qs = (
         AuctionLot.objects.filter(auction=lot.auction, status=AuctionLot.Status.PENDING)
         .select_related("player")
     )
+    if restricted_lot_no:
+        qs = qs.filter(lot_no=restricted_lot_no)
 
     next_l = (
         qs.filter(
@@ -659,6 +805,14 @@ def next_lot(request, lot_id: int):
         next_l = qs.order_by("lot_no", "lot_order", "id").first()
 
     if not next_l:
+        if restricted_lot_no:
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "error": f"Lot {restricted_lot_no} must be fully SOLD before moving ahead.",
+                },
+                status=400,
+            )
         return JsonResponse({"ok": False, "error": "No pending lots remaining."}, status=404)
 
     _ensure_lot_start_event(next_l)

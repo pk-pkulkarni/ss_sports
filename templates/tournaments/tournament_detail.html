@@ -191,6 +191,17 @@
             position: relative;
             z-index: 5;
         }
+
+        .rule-card {
+            border: 1px solid rgba(255, 255, 255, .14);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, .04);
+            padding: 16px;
+        }
+
+        .rule-card + .rule-card {
+            margin-top: 12px;
+        }
     </style>
 {% endblock %}
 
@@ -212,6 +223,12 @@
                     <span class="chip">Active: <strong id="activePlayerCount" class="ms-1">{{ active_players }}</strong></span>
                     <span class="chip">{{ tournament.get_status_display }}</span>
                     {% if tournament.auction %}
+                        <span class="chip">
+                            Auction Type:
+                            <strong class="ms-1">
+                                {% if auction_rules_config.is_rule_based %}Rule Based{% else %}Open{% endif %}
+                            </strong>
+                        </span>
                         <span class="chip">Auction Code: <strong
                                 class="ms-1">{{ tournament.auction.code }}</strong></span>
                     {% endif %}
@@ -234,7 +251,13 @@
                     </form>
                     <a class="btn btn-outline-light" href="{% url 'lot_manager' slug=tournament.slug %}">Manage Lots</a>
                 {% endif %}
-                <a class="btn btn-accent" href="{% url 'auction_screen' slug=tournament.slug %}">Auction</a>
+                {% if can_manage and not auction_setup_locked %}
+                    <button class="btn btn-accent" type="button" data-bs-toggle="modal" data-bs-target="#auctionSetupModal">
+                        Auction
+                    </button>
+                {% else %}
+                    <a class="btn btn-accent" href="{% url 'auction_screen' slug=tournament.slug %}">Auction</a>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -407,7 +430,7 @@
                   <label class="form-label">{{ player_form.bowling_style.label }}</label>
                   {{ player_form.bowling_style }}
                 </div>
-                <div class="col-12 col-md-6" style="display: none">
+                <div class="col-12 col-md-6">
                   <label class="form-label">{{ player_form.base_price.label }}</label>
                   {{ player_form.base_price }}
                 </div>
@@ -513,7 +536,7 @@
                   <label class="form-label">{{ player_form.bowling_style.label }}</label>
                   {{ player_form.bowling_style }}
                 </div>
-                <div class="col-12 col-md-6" style="display: none">
+                <div class="col-12 col-md-6">
                   <label class="form-label">{{ player_form.base_price.label }}</label>
                   {{ player_form.base_price }}
                 </div>
@@ -561,6 +584,162 @@
             <div class="modal-footer" style="border-top:1px solid var(--line);">
               <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancel</button>
               <button type="submit" class="btn btn-accent">Save Changes</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="auctionSetupModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content card-glass" style="border:1px solid var(--line);">
+          <div class="modal-header" style="border-bottom:1px solid var(--line);">
+            <div>
+              <h5 class="modal-title mb-1">Start Auction</h5>
+              <div class="muted" style="font-size:.9rem;">
+                Choose open auction or configure rule-based auction.
+              </div>
+            </div>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <form method="post" action="{% url 'setup_auction' slug=tournament.slug %}" id="auctionSetupForm">
+            {% csrf_token %}
+            <div class="modal-body" style="overflow:auto; max-height: 90vh;">
+              {% if auction_setup_locked %}
+                <div class="alert alert-warning mb-0">
+                  Auction rules are locked after the first running, sold, unsold, or bid activity.
+                </div>
+              {% else %}
+                <div class="rule-card">
+                  <div class="form-check mb-2">
+                    <input
+                      class="form-check-input"
+                      type="radio"
+                      name="auction_type"
+                      id="auctionTypeOpen"
+                      value="open"
+                      {% if not auction_rules_config.is_rule_based %}checked{% endif %}
+                    >
+                    <label class="form-check-label fw-semibold" for="auctionTypeOpen">Open Auction</label>
+                  </div>
+                  <div class="muted" style="font-size:.9rem;">
+                    Keep the current auction behavior unchanged.
+                  </div>
+                </div>
+
+                <div class="rule-card">
+                  <div class="form-check mb-2">
+                    <input
+                      class="form-check-input"
+                      type="radio"
+                      name="auction_type"
+                      id="auctionTypeRuleBased"
+                      value="rule_based"
+                      {% if auction_rules_config.is_rule_based %}checked{% endif %}
+                    >
+                    <label class="form-check-label fw-semibold" for="auctionTypeRuleBased">Rule Based Auction</label>
+                  </div>
+                  <div class="muted" style="font-size:.9rem;">
+                    Select at least one rule. Rule 1 and Rule 2 are alternatives, and Rule 3 can be combined with either.
+                  </div>
+                </div>
+
+                <div id="ruleBasedBlock" class="mt-3">
+                  <div class="rule-card">
+                    <div class="form-check">
+                      <input
+                        class="form-check-input js-rule-switch"
+                        type="checkbox"
+                        name="rule_lot1"
+                        id="ruleLot1"
+                        value="1"
+                        {% if auction_rules_config.rule_lot1_enabled %}checked{% endif %}
+                      >
+                      <label class="form-check-label fw-semibold" for="ruleLot1">Rule 1: Lot 1 must be sold first</label>
+                    </div>
+                    <div class="muted mt-2" style="font-size:.9rem;">
+                      Lot 1 keeps looping until every available Lot 1 player is sold. Enter how many Lot 1 players each team can take.
+                    </div>
+                    <div id="ruleLot1Fields" class="row g-3 mt-1">
+                      <div class="col-12 col-md-6">
+                        <label class="form-label" for="rule1Lot1PlayersPerTeam">Lot 1 players per team</label>
+                        <input
+                          class="form-control"
+                          type="number"
+                          min="1"
+                          name="rule1_lot1_players_per_team"
+                          id="rule1Lot1PlayersPerTeam"
+                          value="{{ auction_rules_config.lot1_players_per_team|default_if_none:'' }}"
+                        >
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="rule-card">
+                    <div class="form-check">
+                      <input
+                        class="form-check-input js-rule-switch"
+                        type="checkbox"
+                        name="rule_lot1_and_lot2"
+                        id="ruleLot1AndLot2"
+                        value="1"
+                        {% if auction_rules_config.rule_lot1_and_lot2_enabled %}checked{% endif %}
+                      >
+                      <label class="form-check-label fw-semibold" for="ruleLot1AndLot2">Rule 2: Lot 1 and Lot 2 must be sold</label>
+                    </div>
+                    <div class="muted mt-2" style="font-size:.9rem;">
+                      Lot 1 must finish first, then Lot 2 must finish the same way before the auction moves ahead.
+                    </div>
+                    <div id="ruleLot1AndLot2Fields" class="row g-3 mt-1">
+                      <div class="col-12 col-md-6">
+                        <label class="form-label" for="rule2Lot1PlayersPerTeam">Lot 1 players per team</label>
+                        <input
+                          class="form-control"
+                          type="number"
+                          min="1"
+                          name="rule2_lot1_players_per_team"
+                          id="rule2Lot1PlayersPerTeam"
+                          value="{% if auction_rules_config.rule_lot1_and_lot2_enabled %}{{ auction_rules_config.lot1_players_per_team|default_if_none:'' }}{% endif %}"
+                        >
+                      </div>
+                      <div class="col-12 col-md-6">
+                        <label class="form-label" for="rule2Lot2PlayersPerTeam">Lot 2 players per team</label>
+                        <input
+                          class="form-control"
+                          type="number"
+                          min="1"
+                          name="rule2_lot2_players_per_team"
+                          id="rule2Lot2PlayersPerTeam"
+                          value="{{ auction_rules_config.lot2_players_per_team|default_if_none:'' }}"
+                        >
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="rule-card">
+                    <div class="form-check">
+                      <input
+                        class="form-check-input js-rule-switch"
+                        type="checkbox"
+                        name="rule_price_caps"
+                        id="rulePriceCaps"
+                        value="1"
+                        {% if auction_rules_config.rule_price_caps_enabled %}checked{% endif %}
+                      >
+                      <label class="form-check-label fw-semibold" for="rulePriceCaps">Rule 3: Price caps per team</label>
+                    </div>
+                    <div class="muted mt-2" style="font-size:.9rem;">
+                      Each team can buy only 1 player with base price 7,00,000, only 1 with 5,00,000, and only 1 with 4,00,000.
+                    </div>
+                  </div>
+                </div>
+              {% endif %}
+            </div>
+            <div class="modal-footer" style="border-top:1px solid var(--line);">
+              <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancel</button>
+              {% if not auction_setup_locked %}
+                <button type="submit" class="btn btn-accent">Continue to Auction</button>
+              {% endif %}
             </div>
           </form>
         </div>
@@ -927,6 +1106,72 @@
     {% endif %}
 
     {% if can_manage %}
+    <script>
+      (function () {
+        const form = document.getElementById("auctionSetupForm");
+        if (!form) return;
+
+        const auctionTypeOpen = document.getElementById("auctionTypeOpen");
+        const auctionTypeRuleBased = document.getElementById("auctionTypeRuleBased");
+        const ruleBlock = document.getElementById("ruleBasedBlock");
+        const ruleLot1 = document.getElementById("ruleLot1");
+        const ruleLot1AndLot2 = document.getElementById("ruleLot1AndLot2");
+        const rulePriceCaps = document.getElementById("rulePriceCaps");
+        const ruleLot1Fields = document.getElementById("ruleLot1Fields");
+        const ruleLot1AndLot2Fields = document.getElementById("ruleLot1AndLot2Fields");
+        const rule1Lot1Input = document.getElementById("rule1Lot1PlayersPerTeam");
+        const rule2Lot1Input = document.getElementById("rule2Lot1PlayersPerTeam");
+        const rule2Lot2Input = document.getElementById("rule2Lot2PlayersPerTeam");
+
+        function syncRuleVisibility() {
+          const isRuleBased = auctionTypeRuleBased && auctionTypeRuleBased.checked;
+          if (ruleBlock) {
+            ruleBlock.style.display = isRuleBased ? "" : "none";
+          }
+
+          if (ruleLot1Fields) {
+            ruleLot1Fields.style.display = ruleLot1 && ruleLot1.checked && isRuleBased ? "" : "none";
+          }
+          if (ruleLot1AndLot2Fields) {
+            ruleLot1AndLot2Fields.style.display = ruleLot1AndLot2 && ruleLot1AndLot2.checked && isRuleBased ? "" : "none";
+          }
+
+          if (rule1Lot1Input) rule1Lot1Input.required = !!(isRuleBased && ruleLot1 && ruleLot1.checked);
+          if (rule2Lot1Input) rule2Lot1Input.required = !!(isRuleBased && ruleLot1AndLot2 && ruleLot1AndLot2.checked);
+          if (rule2Lot2Input) rule2Lot2Input.required = !!(isRuleBased && ruleLot1AndLot2 && ruleLot1AndLot2.checked);
+        }
+
+        function syncExclusiveRules(changed) {
+          if (!changed || !changed.checked) return;
+          if (changed === ruleLot1 && ruleLot1AndLot2) {
+            ruleLot1AndLot2.checked = false;
+          }
+          if (changed === ruleLot1AndLot2 && ruleLot1) {
+            ruleLot1.checked = false;
+          }
+          syncRuleVisibility();
+        }
+
+        auctionTypeOpen?.addEventListener("change", syncRuleVisibility);
+        auctionTypeRuleBased?.addEventListener("change", syncRuleVisibility);
+        ruleLot1?.addEventListener("change", () => syncExclusiveRules(ruleLot1));
+        ruleLot1AndLot2?.addEventListener("change", () => syncExclusiveRules(ruleLot1AndLot2));
+        rulePriceCaps?.addEventListener("change", syncRuleVisibility);
+
+        form.addEventListener("submit", (event) => {
+          if (!(auctionTypeRuleBased && auctionTypeRuleBased.checked)) return;
+
+          const selectedCount = [ruleLot1, ruleLot1AndLot2, rulePriceCaps].filter((el) => el && el.checked).length;
+          if (selectedCount < 1) {
+            event.preventDefault();
+            alert("Select at least one rule for a rule-based auction.");
+          }
+        });
+
+        syncRuleVisibility();
+      })();
+    </script>
+
     <script>
       (function () {
         const form = document.getElementById('randomLotsForm');

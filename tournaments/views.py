@@ -12,7 +12,16 @@ from django.views.decorators.http import require_POST
 
 from decimal import Decimal, InvalidOperation
 
-from auctions.models import Auction, Team, TeamPlayer, Player, AuctionLot
+from auctions.models import Auction, Team, TeamPlayer, Player, AuctionLot, Bid
+from auctions.rules import (
+    AUCTION_TYPE_OPEN,
+    AUCTION_TYPE_RULE_BASED,
+    RULE_LOT1,
+    RULE_LOT1_AND_LOT2,
+    RULE_PRICE_CAPS,
+    default_auction_rules,
+    normalize_auction_rules,
+)
 from auctions.services import (
     generate_lots_from_active_players,
     generate_random_lots_from_active_players,
@@ -59,6 +68,70 @@ def _filter_tournament_qs(qs, user):
 
 def _is_ajax(request) -> bool:
     return request.headers.get("x-requested-with") == "XMLHttpRequest"
+
+
+def _auction_has_activity(auction: Auction | None) -> bool:
+    if not auction:
+        return False
+
+    if Bid.objects.filter(lot__auction=auction, is_valid=True).exists():
+        return True
+
+    return AuctionLot.objects.filter(
+        auction=auction,
+        status__in=[
+            AuctionLot.Status.RUNNING,
+            AuctionLot.Status.SOLD,
+            AuctionLot.Status.UNSOLD,
+        ],
+    ).exists()
+
+
+def _available_lot_count_for_rules(auction: Auction, lot_no: int) -> int:
+    assigned_player_ids = (
+        TeamPlayer.objects.filter(tournament=auction.tournament)
+        .exclude(status=TeamPlayer.Status.RELEASED)
+        .values_list("player_id", flat=True)
+    )
+    return (
+        AuctionLot.objects.filter(auction=auction, lot_no=lot_no)
+        .exclude(status=AuctionLot.Status.WITHDRAWN)
+        .exclude(player_id__in=assigned_player_ids)
+        .count()
+    )
+
+
+def _parse_positive_int(raw_value):
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
+def _build_rule_validation_error(auction: Auction, lot_no: int, players_per_team: int) -> str | None:
+    active_teams = Team.objects.filter(tournament=auction.tournament, is_active=True).count()
+    if active_teams < 1:
+        return "Add at least one active team before starting the auction."
+
+    lot_count = _available_lot_count_for_rules(auction, lot_no)
+    if lot_count < 1:
+        return f"Lot {lot_no} has no auction players available for this rule."
+
+    expected_total = active_teams * players_per_team
+    if lot_count != expected_total:
+        if lot_count % active_teams == 0:
+            exact_value = lot_count // active_teams
+            return (
+                f"Lot {lot_no} has {lot_count} available players and {active_teams} active teams. "
+                f"Use {exact_value} player(s) per team for an exact division."
+            )
+        return (
+            f"Lot {lot_no} has {lot_count} available players and {active_teams} active teams, "
+            "so it cannot be divided equally across teams right now."
+        )
+
+    return None
 
 
 @login_required
@@ -127,6 +200,9 @@ def tournament_detail(request, slug: str):
     assigned_player_ids = set(
         TeamPlayer.objects.filter(tournament=tournament).values_list("player_id", flat=True)
     )
+    auction = getattr(tournament, "auction", None)
+    auction_rules_config = normalize_auction_rules(auction) if auction else default_auction_rules()
+    auction_setup_locked = _auction_has_activity(auction)
 
     context = {
         "tournament": tournament,
@@ -140,8 +216,91 @@ def tournament_detail(request, slug: str):
         "can_manage": can_manage_tournament(request.user, tournament),
         "player_form": PlayerForm(),
         "team_form": TeamCreateForm(),
+        "auction_rules_config": auction_rules_config,
+        "auction_setup_locked": auction_setup_locked,
     }
     return render(request, "tournaments/tournament_detail.html", context)
+
+
+@login_required
+@require_POST
+def setup_auction(request, slug: str):
+    tournament = get_object_or_404(
+        _filter_tournament_qs(Tournament.objects.select_related("auction"), request.user),
+        slug=slug,
+    )
+
+    if not can_manage_tournament(request.user, tournament):
+        messages.error(request, "Forbidden.")
+        return redirect("tournament_detail", slug=tournament.slug)
+
+    auction = _ensure_auction(tournament)
+    if _auction_has_activity(auction):
+        messages.error(request, "Auction rules can't be changed after auction activity has started.")
+        return redirect("auction_screen", slug=tournament.slug)
+
+    auction_type = (request.POST.get("auction_type") or AUCTION_TYPE_OPEN).strip().lower()
+    if auction_type not in {AUCTION_TYPE_OPEN, AUCTION_TYPE_RULE_BASED}:
+        auction_type = AUCTION_TYPE_OPEN
+
+    if auction_type == AUCTION_TYPE_OPEN:
+        auction.rules = {"auction_type": AUCTION_TYPE_OPEN}
+        auction.save(update_fields=["rules", "updated_at"])
+        messages.success(request, "Auction is set to open auction.")
+        return redirect("auction_screen", slug=tournament.slug)
+
+    rule_lot1 = request.POST.get("rule_lot1") == "1"
+    rule_lot1_and_lot2 = request.POST.get("rule_lot1_and_lot2") == "1"
+    rule_price_caps = request.POST.get("rule_price_caps") == "1"
+
+    if rule_lot1 and rule_lot1_and_lot2:
+        messages.error(request, "Select either Rule 1 or Rule 2, not both.")
+        return redirect("tournament_detail", slug=tournament.slug)
+
+    if not any([rule_lot1, rule_lot1_and_lot2, rule_price_caps]):
+        messages.error(request, "Select at least one rule for a rule-based auction.")
+        return redirect("tournament_detail", slug=tournament.slug)
+
+    lot1_players_per_team = None
+    lot2_players_per_team = None
+
+    if rule_lot1:
+        lot1_players_per_team = _parse_positive_int(request.POST.get("rule1_lot1_players_per_team"))
+        if not lot1_players_per_team:
+            messages.error(request, "Enter a valid Lot 1 players-per-team value for Rule 1.")
+            return redirect("tournament_detail", slug=tournament.slug)
+
+        error = _build_rule_validation_error(auction, 1, lot1_players_per_team)
+        if error:
+            messages.error(request, error)
+            return redirect("tournament_detail", slug=tournament.slug)
+
+    if rule_lot1_and_lot2:
+        lot1_players_per_team = _parse_positive_int(request.POST.get("rule2_lot1_players_per_team"))
+        lot2_players_per_team = _parse_positive_int(request.POST.get("rule2_lot2_players_per_team"))
+
+        if not lot1_players_per_team or not lot2_players_per_team:
+            messages.error(request, "Enter valid Lot 1 and Lot 2 players-per-team values for Rule 2.")
+            return redirect("tournament_detail", slug=tournament.slug)
+
+        for lot_no, per_team in ((1, lot1_players_per_team), (2, lot2_players_per_team)):
+            error = _build_rule_validation_error(auction, lot_no, per_team)
+            if error:
+                messages.error(request, error)
+                return redirect("tournament_detail", slug=tournament.slug)
+
+    auction.rules = {
+        "auction_type": AUCTION_TYPE_RULE_BASED,
+        RULE_LOT1: rule_lot1,
+        RULE_LOT1_AND_LOT2: rule_lot1_and_lot2,
+        RULE_PRICE_CAPS: rule_price_caps,
+        "lot1_players_per_team": lot1_players_per_team,
+        "lot2_players_per_team": lot2_players_per_team,
+    }
+    auction.save(update_fields=["rules", "updated_at"])
+
+    messages.success(request, "Auction rules saved.")
+    return redirect("auction_screen", slug=tournament.slug)
 
 
 @login_required

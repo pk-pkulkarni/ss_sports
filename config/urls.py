@@ -53,6 +53,7 @@ urlpatterns = [
     path("t/<slug:slug>/players/update/", tournament_views.player_update, name="player_update"),
     path("t/<slug:slug>/players/<int:player_id>/delete/", tournament_views.player_delete, name="player_delete"),
     path("t/<slug:slug>/players/<int:player_id>/edit/", tournament_views.player_edit, name="player_edit"),
+    path("t/<slug:slug>/auction/setup/", tournament_views.setup_auction, name="setup_auction"),
     path("t/<slug:slug>/generate-lots/", tournament_views.generate_lots, name="generate_lots"),
     path("t/<slug:slug>/generate-random-lots/", tournament_views.generate_random_lots, name="generate_random_lots"),
     path("t/<slug:slug>/lots/manage/", tournament_views.lot_manager, name="lot_manager"),

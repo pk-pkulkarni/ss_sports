@@ -6,6 +6,8 @@ from auctions.models import Team, Player
 
 from .models import Tournament
 
+DEFAULT_PLAYER_BASE_PRICE = 10000
+
 
 class TournamentCreateForm(forms.ModelForm):
     class Meta:
@@ -104,6 +106,8 @@ class PlayerForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
 
         self.fields["is_active"].initial = True
+        if not (self.instance and self.instance.pk):
+            self.fields["base_price"].initial = DEFAULT_PLAYER_BASE_PRICE
         # Populate stat fields from instance.stats
         stats = {}
         if self.instance and self.instance.pk and isinstance(self.instance.stats, dict):
@@ -146,6 +150,8 @@ class PlayerForm(forms.ModelForm):
     def save(self, commit=True):
         instance = super().save(commit=False)
         instance.stats = self.cleaned_data.get("stats")
+        if instance.base_price in (None, ""):
+            instance.base_price = DEFAULT_PLAYER_BASE_PRICE
         if commit:
             instance.save()
         return instance
@@ -268,6 +274,8 @@ class PublicPlayerRegistrationForm(forms.ModelForm):
 
         # Public registrations are active by default.
         instance.is_active = True
+        if instance.base_price in (None, "") or instance.base_price == 0:
+            instance.base_price = DEFAULT_PLAYER_BASE_PRICE
 
         if commit:
             instance.save()
