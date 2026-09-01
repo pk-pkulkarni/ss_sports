@@ -49,6 +49,7 @@ urlpatterns = [
     path("t/<slug:slug>/", tournament_views.tournament_detail, name="tournament_detail"),
     path("t/<slug:slug>/teams/create/", tournament_views.team_create, name="team_create"),
     path("t/<slug:slug>/teams/<int:team_id>/edit/", tournament_views.team_edit, name="team_edit"),
+    path("t/<slug:slug>/owner/teams/<int:team_id>/", tournament_views.owner_dashboard, name="owner_dashboard"),
     path("t/<slug:slug>/players/create/", tournament_views.player_create, name="player_create"),
     path("t/<slug:slug>/players/update/", tournament_views.player_update, name="player_update"),
     path("t/<slug:slug>/players/<int:player_id>/delete/", tournament_views.player_delete, name="player_delete"),
@@ -65,6 +66,7 @@ urlpatterns = [
     # Auction screen (UI)
     path("t/<slug:slug>/auction/", auction_views.auction_screen, name="auction_screen"),
     path("t/<slug:slug>/auction/updates/", auction_views.auction_updates_public, name="auction_updates_public"),
+    path("t/<slug:slug>/auction/stage/", auction_views.auction_stage_public, name="auction_stage_public"),
     path("t/<slug:slug>/auction/updates/feed/", auction_views.auction_updates_feed, name="auction_updates_feed"),
 
     # API-like endpoints (POST)

@@ -16,6 +16,48 @@
       </div>
       <div class="divider"></div>
 
+      {% if owner_access_cards %}
+        <div class="mb-4">
+          <h2 class="mb-1" style="font-weight:800; font-size:1.15rem;">Team Owner Dashboards</h2>
+          <div class="muted mb-3">Shortcuts for team-linked accounts and organizer previews.</div>
+          <div class="row g-3">
+            {% for item in owner_access_cards %}
+              <div class="col-12 col-md-6 col-lg-4">
+                <div
+                  class="card-glass p-3 h-100"
+                  style="background:
+                    radial-gradient(220px 160px at 10% 12%, {{ item.team.secondary_color }}33, transparent 65%),
+                    radial-gradient(220px 160px at 88% 18%, {{ item.team.accent_color }}2b, transparent 65%),
+                    linear-gradient(160deg, {{ item.team.primary_color }}f2, rgba(9, 13, 28, .92));"
+                >
+                  <div class="d-flex justify-content-between align-items-start gap-2">
+                    <div>
+                      <div class="muted" style="font-size:.9rem;">{{ item.tournament.name }}</div>
+                      <div style="font-weight:900;font-size:1.1rem;">{{ item.team.name }}</div>
+                      <div class="muted" style="font-size:.85rem;">
+                        {{ item.access.get_role_display }}
+                        {% if item.access.is_primary %}• Primary{% endif %}
+                      </div>
+                    </div>
+                    <span class="chip">{{ item.team.short_name|default:"TEAM" }}</span>
+                  </div>
+
+                  {% if item.team.tagline %}
+                    <div class="muted mt-3" style="font-size:.9rem;">{{ item.team.tagline }}</div>
+                  {% endif %}
+
+                  <div class="divider"></div>
+
+                  <a class="btn btn-accent w-100" href="{% url 'owner_dashboard' slug=item.tournament.slug team_id=item.team.id %}">Open Owner Dashboard</a>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="divider"></div>
+      {% endif %}
+
       {% if tournaments %}
         <div class="row g-3">
           {% for t in tournaments %}
@@ -38,7 +80,13 @@
           {% endfor %}
         </div>
       {% else %}
-        <div class="muted">No tournaments found. Create one using the button above.</div>
+        <div class="muted">
+          {% if owner_access_cards %}
+            No organizer tournaments found for this account.
+          {% else %}
+            No tournaments found. Create one using the button above.
+          {% endif %}
+        </div>
       {% endif %}
     </div>
   </div>

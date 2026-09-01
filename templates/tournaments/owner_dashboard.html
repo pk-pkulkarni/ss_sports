@@ -1,0 +1,1132 @@
+{% extends "base.html" %}
+{% load inr %}
+
+{% block title %}{{ team.name }} Owner Dashboard | {{ tournament.name }}{% endblock %}
+
+{% block head %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Manrope:wght@400;600;700;800&display=swap"
+          rel="stylesheet">
+    <style>
+        .owner-shell {
+            --team-primary: {{ team.primary_color }};
+            --team-secondary: {{ team.secondary_color }};
+            --team-accent: {{ team.accent_color }};
+            --owner-ink: #09111f;
+            font-family: "Manrope", sans-serif;
+        }
+
+        .owner-hero {
+            position: relative;
+            overflow: hidden;
+            padding: 24px;
+            border-radius: 30px;
+            border: 1px solid rgba(255, 255, 255, .18);
+            background: radial-gradient(420px 240px at 12% 8%, color-mix(in srgb, var(--team-secondary) 34%, transparent), transparent 70%),
+            radial-gradient(420px 240px at 88% 12%, color-mix(in srgb, var(--team-accent) 28%, transparent), transparent 72%),
+            linear-gradient(145deg, color-mix(in srgb, var(--team-primary) 88%, #07101d), rgba(8, 14, 28, .94));
+            box-shadow: 0 24px 80px rgba(0, 0, 0, .45);
+        }
+
+        .owner-name {
+            font-family: "Bebas Neue", sans-serif;
+            font-size: clamp(2.7rem, 8vw, 5rem);
+            letter-spacing: 1px;
+            line-height: .95;
+            margin: 0;
+        }
+
+        .owner-tagline {
+            max-width: 760px;
+            color: rgba(243, 247, 255, .84);
+            font-size: 1rem;
+            margin-top: .45rem;
+        }
+
+        .top-meta,
+        .owner-actions,
+        .player-meta,
+        .lot-player-list,
+        .player-cell {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .top-meta {
+            justify-content: space-between;
+        }
+
+        .owner-chip,
+        .status-pill,
+        .player-meta span,
+        .lot-player-chip,
+        .mini-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+            padding: .38rem .78rem;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, .18);
+            background: rgba(255, 255, 255, .09);
+            color: rgba(243, 247, 255, .92);
+            font-weight: 800;
+            font-size: .84rem;
+        }
+
+        .owner-chip strong {
+            color: #fff;
+        }
+
+        .owner-actions {
+            margin-top: 16px;
+        }
+
+        .owner-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 44px;
+            padding: .7rem 1rem;
+            border-radius: 14px;
+            text-decoration: none;
+            font-weight: 900;
+            color: rgba(243, 247, 255, .95);
+            border: 1px solid rgba(255, 255, 255, .2);
+            background: rgba(255, 255, 255, .08);
+        }
+
+        .owner-btn:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, .12);
+        }
+
+        .owner-btn.primary {
+            color: var(--owner-ink);
+            border: 0;
+            background: linear-gradient(90deg, var(--team-secondary), var(--team-accent));
+            box-shadow: 0 14px 28px color-mix(in srgb, var(--team-secondary) 30%, transparent);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 14px;
+            margin-top: 18px;
+        }
+
+        .stat-card,
+        .owner-panel,
+        .live-kpi,
+        .mini-card,
+        .lot-card {
+            border: 1px solid rgba(255, 255, 255, .14);
+            background: linear-gradient(180deg, rgba(255, 255, 255, .10), rgba(255, 255, 255, .04));
+            border-radius: 20px;
+        }
+
+        .stat-card {
+            padding: 16px;
+        }
+
+        .stat-label,
+        .section-note,
+        .mini-card .eyebrow,
+        .live-kpi .k-label,
+        .squad-table th {
+            color: rgba(243, 247, 255, .68);
+            font-size: .78rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+        }
+
+        .stat-value,
+        .player-name,
+        .live-kpi .k-value,
+        .lot-no {
+            font-family: "Bebas Neue", sans-serif;
+            line-height: 1;
+            letter-spacing: .03em;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            margin-top: .35rem;
+        }
+
+        .stat-sub,
+        .lot-detail,
+        .refresh-note {
+            color: rgba(243, 247, 255, .74);
+            font-size: .86rem;
+            margin-top: .3rem;
+        }
+
+        .owner-row-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.15fr .9fr;
+            gap: 18px;
+            margin-top: 18px;
+            align-items: start;
+        }
+
+        .owner-row-grid.secondary {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .strategy-row-grid {
+            display: grid;
+            grid-template-columns: .9fr 1.1fr;
+            gap: 18px;
+            margin-top: 18px;
+            align-items: start;
+        }
+
+        .market-row-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 18px;
+            margin-top: 18px;
+            align-items: start;
+        }
+
+        @media (max-width: 1180px) {
+            .stats-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .owner-row-grid,
+            .owner-row-grid.secondary,
+            .strategy-row-grid,
+            .market-row-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .field-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .owner-panel {
+            overflow: hidden;
+            box-shadow: 0 18px 50px rgba(0, 0, 0, .26);
+            backdrop-filter: blur(12px);
+        }
+
+        .panel-pad {
+            padding: 18px;
+        }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .section-title h3,
+        .section-title h4 {
+            margin: 0;
+            font-weight: 900;
+        }
+
+        .status-pill.eligible {
+            color: #d7fff0;
+            border-color: rgba(34, 197, 94, .42);
+            background: rgba(34, 197, 94, .16);
+        }
+
+        .status-pill.leading {
+            color: #eaf8ff;
+            border-color: rgba(56, 189, 248, .45);
+            background: rgba(56, 189, 248, .16);
+        }
+
+        .status-pill.blocked {
+            color: #ffe0e0;
+            border-color: rgba(248, 113, 113, .42);
+            background: rgba(248, 113, 113, .16);
+        }
+
+        .status-pill.idle {
+            color: #f5eac8;
+            border-color: rgba(245, 158, 11, .36);
+            background: rgba(245, 158, 11, .14);
+        }
+
+        .player-name {
+            font-size: clamp(2rem, 5vw, 3rem);
+            margin: 0;
+            line-height: .95;
+        }
+
+        .player-meta {
+            margin: 12px 0 16px;
+        }
+
+        .live-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        @media (max-width: 640px) {
+            .live-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .live-kpi,
+        .mini-card,
+        .lot-card {
+            padding: 14px;
+        }
+
+        .live-kpi .k-value {
+            font-size: 2rem;
+            margin-top: .35rem;
+        }
+
+        .mini-card .value {
+            font-size: 1.05rem;
+            font-weight: 900;
+            margin-top: .35rem;
+        }
+
+        .breakdown-list,
+        .event-list,
+        .strategy-list,
+        .player-card-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .lot-grid {
+            display: grid;
+            gap: 12px;
+        }
+
+        .lot-no {
+            font-size: 1.8rem;
+        }
+
+        .lot-player-list {
+            margin-top: .6rem;
+            gap: 8px;
+        }
+
+        .lot-player-chip {
+            font-size: .78rem;
+            padding: .28rem .6rem;
+        }
+
+        .event-item {
+            padding: 12px 14px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, .12);
+            background: rgba(255, 255, 255, .05);
+        }
+
+        .event-time {
+            color: rgba(243, 247, 255, .6);
+            font-size: .78rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+        }
+
+        .event-message {
+            margin-top: .35rem;
+            font-weight: 700;
+        }
+
+        .squad-panel {
+            min-width: 0;
+        }
+
+        .squad-table-wrap {
+            overflow: auto;
+            max-height: 520px;
+            border: 1px solid rgba(255, 255, 255, .12);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, .04);
+        }
+
+        .squad-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 680px;
+        }
+
+        .squad-table td,
+        .squad-table th {
+            padding: 12px 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, .10);
+            vertical-align: middle;
+        }
+
+        .squad-table tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .squad-table td {
+            font-size: .92rem;
+        }
+
+        .player-cell {
+            gap: 8px;
+        }
+
+        .player-name-sm {
+            font-weight: 900;
+        }
+
+        .player-sub {
+            color: rgba(243, 247, 255, .68);
+            font-size: .8rem;
+        }
+
+        .row-control {
+            background: rgba(255, 255, 255, .08);
+            border: 1px solid rgba(255, 255, 255, .14);
+            color: var(--text);
+            border-radius: 12px;
+            padding: .5rem .65rem;
+            min-width: 120px;
+        }
+
+        .row-control:disabled {
+            opacity: .55;
+            cursor: not-allowed;
+        }
+
+        .row-control option {
+            color: #08111f;
+            background: #f8fafc;
+        }
+
+        .row-btn {
+            min-height: 38px;
+            padding: .45rem .75rem;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, .16);
+            background: rgba(255, 255, 255, .08);
+            color: rgba(243, 247, 255, .94);
+            font-weight: 900;
+        }
+
+        .row-btn:hover {
+            background: rgba(255, 255, 255, .12);
+        }
+
+        .row-btn.primary {
+            color: var(--owner-ink);
+            border: 0;
+            background: linear-gradient(90deg, var(--team-secondary), var(--team-accent));
+        }
+
+        .row-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .designation-badge,
+        .captain-badge,
+        .lock-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: .28rem .6rem;
+            border-radius: 999px;
+            font-size: .78rem;
+            font-weight: 900;
+            border: 1px solid rgba(255, 255, 255, .16);
+            background: rgba(255, 255, 255, .08);
+        }
+
+        .captain-badge {
+            color: #eaf8ff;
+            border-color: rgba(56, 189, 248, .45);
+            background: rgba(56, 189, 248, .16);
+        }
+
+        .lock-badge {
+            color: #f5eac8;
+            border-color: rgba(245, 158, 11, .36);
+            background: rgba(245, 158, 11, .14);
+        }
+
+        .empty-state {
+            color: rgba(243, 247, 255, .72);
+            padding: 6px 0;
+        }
+
+        .role-row,
+        .strategy-item,
+        .watchlist-form {
+            padding: 14px;
+            border-radius: 18px;
+            border: 1px solid rgba(255, 255, 255, .12);
+            background: rgba(255, 255, 255, .05);
+        }
+
+        .role-row.filled {
+            border-color: rgba(34, 197, 94, .28);
+            background: rgba(34, 197, 94, .10);
+        }
+
+        .role-row.open {
+            border-color: rgba(251, 191, 36, .30);
+            background: rgba(251, 191, 36, .10);
+        }
+
+        .role-row.urgent {
+            border-color: rgba(248, 113, 113, .34);
+            background: rgba(248, 113, 113, .10);
+        }
+
+        .strategy-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: flex-start;
+            font-weight: 900;
+        }
+
+        .role-meter,
+        .spend-meter {
+            height: 9px;
+            margin-top: 10px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: rgba(255, 255, 255, .10);
+        }
+
+        .role-fill,
+        .spend-fill {
+            height: 100%;
+            border-radius: inherit;
+            background: linear-gradient(90deg, var(--team-secondary), var(--team-accent));
+        }
+
+        .field-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.1fr) 140px;
+            gap: 10px;
+        }
+
+        .watchlist-form .row-control {
+            width: 100%;
+        }
+
+        .watchlist-note {
+            grid-column: 1 / -1;
+        }
+
+        .strategy-meta {
+            margin-top: .45rem;
+            color: rgba(243, 247, 255, .70);
+            font-size: .84rem;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div class="owner-shell">
+        <div class="owner-hero">
+            <div class="top-meta">
+                <div class="d-flex flex-wrap gap-2">
+                    <span class="owner-chip">{{ tournament.name }}</span>
+                    <span class="owner-chip">{{ team.short_name|default:"TEAM" }}</span>
+                    <span class="owner-chip">Auction: <strong>{% if auction_rules_config.is_rule_based %}Rule
+                        Based{% else %}Open{% endif %}</strong></span>
+                    {% if auction %}
+                        <span class="owner-chip">Status: <strong>{{ auction.get_status_display }}</strong></span>
+                    {% endif %}
+                </div>
+                {% if owner_access %}
+                    <span class="owner-chip">{{ owner_access.get_role_display }}: <strong>{{ request.user.username }}</strong></span>
+                {% elif can_manage %}
+                    <span class="owner-chip">Organizer Preview</span>
+                {% endif %}
+            </div>
+
+            <div class="mt-4">
+                <div class="muted" style="font-weight:800; letter-spacing:.08em; text-transform:uppercase;">Team Owner
+                    Portal
+                </div>
+                <h1 class="owner-name">{{ team.name }}</h1>
+                <div class="owner-tagline">
+                    {% if team.tagline %}
+                        {{ team.tagline }}
+                    {% else %}
+                        Live war-room view for purse, squad, lot-wise progress, and auction status.
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="owner-actions">
+                <a class="owner-btn primary" href="{% url 'auction_updates_public' slug=tournament.slug %}"
+                   target="_blank" rel="noopener noreferrer">Public Live Updates</a>
+                {% comment %}
+                <a class="owner-btn" href="{% url 'auction_stage_public' slug=tournament.slug %}" target="_blank"
+                   rel="noopener noreferrer">Stage Mode</a>
+                {% endcomment %}
+                {% if can_manage %}
+                    {% comment %}
+                    <a class="owner-btn" href="{% url 'team_edit' slug=tournament.slug team_id=team.id %}">Edit Team</a>
+                    {% endcomment %}
+                    <a class="owner-btn" href="{% url 'auction_screen' slug=tournament.slug %}">Organizer Auction
+                        Screen</a>
+                {% endif %}
+                <a class="owner-btn" href="{% url 'tournament_list' %}">All Dashboards</a>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Purse Remaining</div>
+                    <div class="stat-value">₹ {{ team.purse_remaining|inr }}</div>
+                    <div class="stat-sub">of ₹ {{ team.purse_total|inr }}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Purse Used</div>
+                    <div class="stat-value">₹ {{ spent|inr }}</div>
+                    <div class="stat-sub">Committed squad spend</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Squad Size</div>
+                    <div class="stat-value">
+                        {{ players_count }}{% if team.max_players %}/{{ team.max_players }}{% endif %}</div>
+                    <div class="stat-sub">Current active squad</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Slots Left</div>
+                    <div class="stat-value">
+                        {% if slots_remaining != None %}{{ slots_remaining }}{% else %}—{% endif %}</div>
+                    <div class="stat-sub">Based on max players</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Highest Buy</div>
+                    <div class="stat-value">{% if highest_buy_entry %}₹
+                        {{ highest_buy_entry.bought_price|inr }}{% else %}—{% endif %}</div>
+                    <div class="stat-sub">
+                        {% if highest_buy_entry %}{{ highest_buy_entry.player.name }}{% else %}No purchases
+                            yet{% endif %}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Average Buy</div>
+                    <div class="stat-value">{% if average_buy %}₹ {{ average_buy|inr }}{% else %}—{% endif %}</div>
+                    <div class="stat-sub">Average squad cost</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="owner-row-grid">
+            <div class="owner-panel">
+                <div class="panel-pad">
+                    <div class="section-title">
+                        <h3>Current Lot</h3>
+                        <span class="status-pill {{ bid_status.state }}">{{ bid_status.label }}</span>
+                    </div>
+
+                    {% if current_lot_payload %}
+                        <div class="section-note">Appearance {{ current_lot_payload.appearance_no }} •
+                            Lot {{ current_lot_payload.lot.lot_no }}.{{ current_lot_payload.lot.lot_order }}</div>
+                        <p class="player-name">{{ current_lot_payload.lot.player.name }}</p>
+
+                        <div class="player-meta">
+                            <span>{{ current_lot_payload.lot.player.get_role_display|default:"Role TBD" }}</span>
+                            <span>Base ₹ {{ current_lot_payload.lot.base_price_snapshot|inr }}</span>
+                            {% if current_lot_payload.lot.player.city %}
+                                <span>{{ current_lot_payload.lot.player.city }}</span>{% endif %}
+                            {% if current_lot_payload.lot.player.age %}
+                                <span>Age {{ current_lot_payload.lot.player.age }}</span>{% endif %}
+                        </div>
+
+                        <div class="live-grid">
+                            <div class="live-kpi">
+                                <div class="k-label">Highest Bid</div>
+                                <div class="k-value">
+                                    {% if current_lot_payload.highest_bid %}
+                                        ₹ {{ current_lot_payload.highest_bid.amount|inr }}
+                                    {% else %}
+                                        ₹ {{ current_lot_payload.lot.base_price_snapshot|inr }}
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="live-kpi">
+                                <div class="k-label">Highest Team</div>
+                                <div class="k-value" style="font-size:1.55rem;">
+                                    {% if current_lot_payload.highest_team %}
+                                        {{ current_lot_payload.highest_team.short_name|default:current_lot_payload.highest_team.name }}
+                                    {% else %}
+                                        Opening
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="live-kpi">
+                                <div class="k-label">Next Bid</div>
+                                <div class="k-value">
+                                    {% if current_lot_payload.next_amount %}
+                                        ₹ {{ current_lot_payload.next_amount|inr }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="refresh-note mt-3">{{ bid_status.detail }}</div>
+                    {% else %}
+                        <div class="mini-card">
+                            <div class="value">No live lot is active.</div>
+                            <div class="lot-detail">Once the auction resumes or the next player is opened, this panel
+                                will refresh automatically.
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="owner-panel squad-panel">
+                <div class="panel-pad">
+                    <div class="section-title">
+                        <div>
+                            <h3>Squad</h3>
+                            <div class="refresh-note" id="ownerRefreshStatus">Auto-refresh every 10 seconds.</div>
+                        </div>
+                        <span class="owner-chip">{{ players_count }} player{{ players_count|pluralize }}</span>
+                    </div>
+
+                    {% if can_edit_squad %}
+                        <div class="refresh-note mb-3">Role and designation changes are available here. Self-linked
+                            owner accounts cannot change their own designation.
+                        </div>
+                    {% endif %}
+
+                    <div class="squad-table-wrap">
+                        <table class="squad-table">
+                            <thead>
+                            <tr>
+                                <th>Player</th>
+                                <th class="text-end">Price</th>
+                                <th>Designation</th>
+                                {% if can_edit_squad %}
+                                    <th>Save</th>{% endif %}
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {% for tp in squad %}
+                                <tr>
+                                    <td>
+                                        <div class="player-cell">
+                                            <div>
+                                                <div class="player-name-sm">{{ tp.player.name }}</div>
+                                                <div class="player-sub">
+                                                    {% if tp.bought_in_auction_id %}Auction buy{% else %}Retained
+                                                        player{% endif %}
+                                                </div>
+                                            </div>
+                                            {% if self_locked_player_id == tp.player_id %}
+                                                <span class="lock-badge">Self linked</span>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td class="text-end" style="font-weight:900;">
+                                        ₹ {{ tp.bought_price|default:0|inr }}</td>
+                                    <td>
+                                        {% if can_edit_squad %}
+                                            <select
+                                                    class="row-control squad-edit-control"
+                                                    name="designation"
+                                                    form="squad-form-{{ tp.id }}"
+                                                    {% if self_locked_player_id == tp.player_id %}disabled{% endif %}
+                                            >
+                                                {% for value, label in designation_choices %}
+                                                    <option value="{{ value }}"
+                                                            {% if tp.designation == value %}selected{% endif %}>{{ label }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        {% else %}
+                                            <span class="designation-badge">{{ tp.get_designation_display }}</span>
+                                        {% endif %}
+                                    </td>
+                                    {% if can_edit_squad %}
+                                        <td>
+                                            <form method="post" id="squad-form-{{ tp.id }}" style="margin:0;">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="action" value="update_owner_squad">
+                                                <input type="hidden" name="team_player_id" value="{{ tp.id }}">
+                                                {% if self_locked_player_id == tp.player_id %}
+                                                    <input type="hidden" name="designation"
+                                                           value="{{ tp.designation }}">
+                                                {% endif %}
+                                            </form>
+                                            <div class="row-actions">
+                                                <button type="submit" class="row-btn primary"
+                                                        form="squad-form-{{ tp.id }}">Save
+                                                </button>
+                                            </div>
+                                        </td>
+                                    {% endif %}
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="{% if can_edit_squad %}4{% else %}3{% endif %}" class="empty-state">No
+                                        players assigned yet.
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="owner-panel">
+                <div class="panel-pad">
+                    <div class="section-title">
+                        <h3>Recent Team Events</h3>
+                    </div>
+                    <div class="event-list">
+                        {% for event in recent_team_events %}
+                            <div class="event-item">
+                                <div class="event-time">{{ event.created_at|date:"H:i:s" }}</div>
+                                <div class="event-message">{{ event.message }}</div>
+                            </div>
+                        {% empty %}
+                            <div class="mini-card">
+                                <div class="value">No team-specific events yet.</div>
+                                <div class="lot-detail">Bids and sold events involving this team will show here.</div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="strategy-row-grid">
+            {% comment %}
+            <div class="owner-panel">
+                <div class="panel-pad">
+                    <div class="section-title">
+                        <h3>Role Gaps</h3>
+                    </div>
+                    <div class="strategy-list">
+                        {% for item in role_gap_indicators %}
+                            <div class="role-row {{ item.status }}">
+                                <div class="strategy-head">
+                                    <span>{{ item.label }}</span>
+                                    <span>{{ item.count }}/{{ item.target }}</span>
+                                </div>
+                                <div class="role-meter">
+                                    <div class="role-fill" style="width: {{ item.width }}%;"></div>
+                                </div>
+                                <div class="strategy-meta">
+                                    {% if item.gap %}
+                                        Need {{ item.gap }} more for balance.
+                                    {% else %}
+                                        Covered for current strategy target.
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endcomment %}
+
+            <div class="owner-panel">
+                <div class="panel-pad">
+                    <div class="section-title">
+                        <h3>Spending Plan</h3>
+                    </div>
+                    <div class="strategy-list">
+                        <div class="strategy-item">
+                            <div class="strategy-head">
+                                <span>Purse Used</span>
+                                <span>{{ spending_insights.purse_used_percent }}%</span>
+                            </div>
+                            <div class="spend-meter">
+                                <div class="spend-fill"
+                                     style="width: {{ spending_insights.purse_used_percent }}%;"></div>
+                            </div>
+                            <div class="strategy-meta">Spend committed against total purse.</div>
+                        </div>
+                        <div class="strategy-item">
+                            <div class="strategy-head">
+                                <span>Avg Budget / Open Slot</span>
+                                <span>
+                                    {% if spending_insights.average_per_open_slot %}
+                                        &#8377; {{ spending_insights.average_per_open_slot|inr }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="strategy-meta">Useful ceiling when filling remaining squad slots.</div>
+                        </div>
+                        <div class="strategy-item">
+                            <div class="strategy-head">
+                                <span>Aggressive Next Buy</span>
+                                <span>&#8377; {{ spending_insights.aggressive_next_bid|inr }}</span>
+                            </div>
+                            <div class="strategy-meta">
+                                Leaves &#8377; {{ spending_insights.reserve_after_next_buy|inr }} reserved after the next buy.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="owner-panel">
+                <div class="panel-pad">
+                    <div class="section-title">
+                        <div>
+                            <h3>Watchlist</h3>
+                            <div class="section-note">Track players your team wants to target later.</div>
+                        </div>
+                        <span class="owner-chip">{{ watchlist_entries|length }}</span>
+                    </div>
+
+                    {% if can_edit_strategy %}
+                        <form method="post" class="watchlist-form mb-3">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="add_watchlist">
+                            <div class="field-grid">
+                                <select class="row-control" name="player_id" required>
+                                    <option value="">Select available player</option>
+                                    {% for player in watchlist_candidates %}
+                                        <option value="{{ player.id }}">
+                                            {{ player.name }} - {{ player.get_role_display|default:"Role TBD" }} -
+                                            &#8377; {{ player.base_price|inr }}
+                                            {% if player.auction_lot %}
+                                                - Lot {{ player.auction_lot.lot_no }}.{{ player.auction_lot.lot_order }}
+                                            {% endif %}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <select class="row-control" name="priority">
+                                    {% for value, label in watchlist_priority_choices %}
+                                        <option value="{{ value }}">{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                                <input class="row-control watchlist-note" name="note" maxlength="180"
+                                       placeholder="Optional note: max price, backup plan, role fit">
+                            </div>
+                            <button type="submit" class="row-btn primary mt-2">Add To Watchlist</button>
+                        </form>
+                    {% endif %}
+
+                    <div class="player-card-list">
+                        {% for entry in watchlist_entries %}
+                            <div class="strategy-item">
+                                <div class="strategy-head">
+                                    <span>{{ entry.player.name }}</span>
+                                    <span class="mini-badge">{{ entry.get_priority_display }}</span>
+                                </div>
+                                <div class="strategy-meta">
+                                    {{ entry.player.get_role_display|default:"Role TBD" }} -
+                                    Base &#8377; {{ entry.player.base_price|inr }}
+                                    {% if entry.auction_lot %}
+                                        - Lot {{ entry.auction_lot.lot_no }}.{{ entry.auction_lot.lot_order }}
+                                    {% endif %}
+                                </div>
+                                {% if entry.note %}
+                                    <div class="strategy-meta">{{ entry.note }}</div>
+                                {% endif %}
+                                {% if can_edit_strategy %}
+                                    <form method="post" class="mt-2">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="remove_watchlist">
+                                        <input type="hidden" name="watchlist_entry_id" value="{{ entry.id }}">
+                                        <button type="submit" class="row-btn">Remove</button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        {% empty %}
+                            <div class="mini-card">
+                                <div class="value">No watchlist players yet.</div>
+                                <div class="lot-detail">Add available players here during auction planning.</div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="market-row-grid">
+            {% comment %}
+            <div class="owner-panel">
+                <div class="panel-pad">
+                    <div class="section-title">
+                        <h3>Bargain Candidates</h3>
+                    </div>
+                    <div class="player-card-list">
+                        {% for player in bargain_candidates %}
+                            <div class="strategy-item">
+                                <div class="strategy-head">
+                                    <span>{{ player.name }}</span>
+                                    <span>&#8377; {{ player.base_price|inr }}</span>
+                                </div>
+                                <div class="strategy-meta">
+                                    {{ player.get_role_display|default:"Role TBD" }}
+                                    {% if player.auction_lot %}
+                                        - Lot {{ player.auction_lot.lot_no }}.{{ player.auction_lot.lot_order }}
+                                    {% endif %}
+                                    {% if player.bid_count %}
+                                        - {{ player.bid_count }} bid{{ player.bid_count|pluralize }}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% empty %}
+                            <div class="mini-card">
+                                <div class="value">No bargain candidates yet.</div>
+                                <div class="lot-detail">This appears when available players fit your open-slot budget.</div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endcomment %}
+
+            <div class="owner-panel">
+                <div class="panel-pad">
+                    <div class="section-title">
+                        <h3>Demand Watch</h3>
+                    </div>
+                    <div class="player-card-list">
+                        {% for player in demand_players %}
+                            <div class="strategy-item">
+                                <div class="strategy-head">
+                                    <span>{{ player.name }}</span>
+                                    <span>{{ player.bid_count }} bid{{ player.bid_count|pluralize }}</span>
+                                </div>
+                                <div class="strategy-meta">
+                                    {{ player.get_role_display|default:"Role TBD" }}
+                                    {% if player.highest_market_bid %}
+                                        - Peak &#8377; {{ player.highest_market_bid|inr }}
+                                    {% endif %}
+                                    {% if player.auction_lot %}
+                                        - Lot {{ player.auction_lot.lot_no }}.{{ player.auction_lot.lot_order }}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% empty %}
+                            <div class="mini-card">
+                                <div class="value">No demand signal yet.</div>
+                                <div class="lot-detail">Players with valid bids from any team will appear here.</div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="owner-row-grid secondary">
+            <div class="owner-panel">
+                <div class="panel-pad">
+                    <div class="section-title">
+                        <h4>Squad Highlights</h4>
+                    </div>
+                    <div class="breakdown-list">
+                        <div class="mini-card">
+                            <div class="eyebrow">Captain</div>
+                            <div class="value">{% if captain_entry %}{{ captain_entry.player.name }}{% else %}Not marked
+                                yet{% endif %}</div>
+                        </div>
+                        <div class="mini-card">
+                            <div class="eyebrow">Marquee</div>
+                            <div class="value">{% if marquee_entry %}{{ marquee_entry.player.name }}{% else %}Not marked
+                                yet{% endif %}</div>
+                        </div>
+                        <div class="mini-card">
+                            <div class="eyebrow">Highest Buy</div>
+                            <div class="value">{% if highest_buy_entry %}{{ highest_buy_entry.player.name }} • ₹
+                                {{ highest_buy_entry.bought_price|inr }}{% else %}No purchases yet{% endif %}</div>
+                        </div>
+                        <div class="mini-card">
+                            <div class="eyebrow">Best Value Buy</div>
+                            <div class="value">{% if lowest_buy_entry %}{{ lowest_buy_entry.player.name }} • ₹
+                                {{ lowest_buy_entry.bought_price|inr }}{% else %}No purchases yet{% endif %}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="owner-panel">
+                <div class="panel-pad">
+                    <div class="section-title">
+                        <h4>Lot Breakdown</h4>
+                    </div>
+                    <div class="lot-grid">
+                        {% for item in lot_breakdown %}
+                            <div class="lot-card">
+                                <div class="lot-no">Lot {{ item.lot_no }}</div>
+                                <div class="lot-detail">
+                                    Bought: {{ item.count }}
+                                    {% if item.limit %} / Limit: {{ item.limit }}{% endif %}
+                                </div>
+                                <div class="lot-player-list">
+                                    {% for player_name in item.players %}
+                                        <span class="lot-player-chip">{{ player_name }}</span>
+                                    {% empty %}
+                                        <span class="lot-player-chip">No players yet</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        {% empty %}
+                            <div class="lot-card">
+                                <div class="lot-no">No Lots Yet</div>
+                                <div class="lot-detail">Lot-wise stats will appear after auction purchases start.</div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        (function () {
+            const statusEl = document.getElementById("ownerRefreshStatus");
+            const controls = Array.from(document.querySelectorAll(".squad-edit-control"));
+            let dirty = false;
+
+            controls.forEach((el) => {
+                el.addEventListener("change", () => {
+                    dirty = true;
+                    if (statusEl) statusEl.textContent = "Auto-refresh paused while you edit a squad row.";
+                });
+            });
+
+            document.querySelectorAll('form[id^="squad-form-"]').forEach((form) => {
+                form.addEventListener("submit", () => {
+                    dirty = false;
+                    if (statusEl) statusEl.textContent = "Saving changes...";
+                });
+            });
+
+            window.setInterval(() => {
+                const activeTag = document.activeElement ? document.activeElement.tagName : "";
+                const editing = ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(activeTag);
+                if (document.visibilityState !== "visible" || dirty || editing) {
+                    return;
+                }
+                window.location.reload();
+            }, 10000);
+        })();
+    </script>
+{% endblock %}

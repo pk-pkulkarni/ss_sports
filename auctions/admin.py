@@ -1,11 +1,10 @@
 from django.db import models, transaction
 
-
 # Register your models here.
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import Auction, Team, Player, AuctionLot, Bid, TeamPlayer, AuctionEvent
+from .models import Auction, Team, Player, AuctionLot, Bid, TeamPlayer, AuctionEvent, TeamAccess, TeamWatchlist
 from .services import generate_lots_from_active_players as generate_lots_for_auction
 
 
@@ -54,6 +53,22 @@ class TeamPlayerInline(admin.TabularInline):
     ordering = ("player__name",)
 
 
+class TeamAccessInline(admin.TabularInline):
+    model = TeamAccess
+    extra = 0
+    fields = ("user", "linked_player", "role", "is_primary", "is_active")
+    autocomplete_fields = ("user", "linked_player")
+    ordering = ("-is_primary", "user__username")
+
+
+class TeamWatchlistInline(admin.TabularInline):
+    model = TeamWatchlist
+    extra = 0
+    fields = ("player", "priority", "note", "added_by")
+    autocomplete_fields = ("player", "added_by")
+    ordering = ("priority", "player__name")
+
+
 # ---------- Admins ----------
 
 @admin.register(Auction)
@@ -100,15 +115,17 @@ class AuctionAdmin(admin.ModelAdmin):
 
 @admin.register(Team)
 class TeamAdmin(admin.ModelAdmin):
-    list_display = ("id", "logo_thumb", "name", "short_name", "tournament", "purse_total", "purse_remaining", "is_active")
+    list_display = ("id", "logo_thumb", "name", "short_name", "tournament", "purse_total", "purse_remaining",
+                    "is_active")
     list_filter = ("is_active", "tournament__season_year", "tournament")
     search_fields = ("name", "short_name", "tournament__name")
     readonly_fields = ("created_at", "updated_at", "logo_preview")
     autocomplete_fields = ("tournament",)
-    inlines = (TeamPlayerInline,)
+    inlines = (TeamAccessInline, TeamPlayerInline, TeamWatchlistInline)
     fieldsets = (
         ("Team", {"fields": ("tournament", "name", "short_name", "is_active")}),
         ("Logo", {"fields": ("logo", "logo_preview")}),
+        ("Branding", {"fields": ("tagline", "primary_color", "secondary_color", "accent_color")}),
         ("Purse", {"fields": ("purse_total", "purse_remaining", "min_players", "max_players")}),
         ("System", {"fields": ("created_at", "updated_at")}),
     )
@@ -227,6 +244,24 @@ class TeamPlayerAdmin(admin.ModelAdmin):
     search_fields = ("player__name", "team__name", "tournament__name")
     autocomplete_fields = ("tournament", "team", "player", "bought_in_auction")
     ordering = ("team__name", "player__name")
+
+
+@admin.register(TeamAccess)
+class TeamAccessAdmin(admin.ModelAdmin):
+    list_display = ("id", "team", "user", "linked_player", "role", "is_primary", "is_active", "updated_at")
+    list_filter = ("role", "is_primary", "is_active", "team__tournament")
+    search_fields = ("team__name", "user__username", "user__email", "team__tournament__name")
+    autocomplete_fields = ("team", "user", "linked_player")
+    ordering = ("team__name", "-is_primary", "user__username")
+
+
+@admin.register(TeamWatchlist)
+class TeamWatchlistAdmin(admin.ModelAdmin):
+    list_display = ("id", "team", "player", "priority", "added_by", "updated_at")
+    list_filter = ("priority", "team__tournament")
+    search_fields = ("team__name", "player__name", "note", "added_by__username")
+    autocomplete_fields = ("team", "player", "added_by")
+    ordering = ("team__name", "priority", "player__name")
 
 
 @admin.register(AuctionEvent)

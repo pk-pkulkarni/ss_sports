@@ -1,0 +1,1295 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Auction Stage | {{ tournament.name }}{% endblock %}
+
+{% block head %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Manrope:wght@400;600;700;800&display=swap"
+          rel="stylesheet">
+    <style>
+        :root {
+            --stage-bg-1: #04101e;
+            --stage-bg-2: #0f172a;
+            --stage-line: rgba(255, 255, 255, .14);
+            --stage-soft: rgba(255, 255, 255, .06);
+            --stage-muted: rgba(241, 245, 249, .72);
+            --stage-gold: #fbbf24;
+            --stage-cyan: #38bdf8;
+            --stage-green: #22c55e;
+            --stage-red: #fb7185;
+        }
+
+        body {
+            background: radial-gradient(1000px 600px at 12% 10%, rgba(56, 189, 248, .20), transparent 55%),
+            radial-gradient(1200px 700px at 82% 8%, rgba(249, 115, 22, .16), transparent 58%),
+            linear-gradient(180deg, rgba(3, 7, 18, .92), rgba(5, 10, 20, .90)),
+            url("{% static 'img/stadium.jpg' %}") center / cover no-repeat fixed;
+            overflow-x: hidden;
+        }
+
+        .site-overlay {
+            background: linear-gradient(180deg, rgba(2, 6, 23, .90), rgba(2, 6, 23, .78)),
+            radial-gradient(circle at top, rgba(56, 189, 248, .10), transparent 45%);
+        }
+
+        main.container {
+            max-width: none;
+            width: 100%;
+            padding-left: 0;
+            padding-right: 0;
+            box-sizing: border-box;
+            overflow-x: hidden;
+        }
+
+        .stage-page {
+            position: relative;
+            display: grid;
+            gap: 12px;
+            min-width: 0;
+            overflow-x: hidden;
+        }
+
+        .stage-page::before {
+            content: "";
+            position: absolute;
+            inset: -40px 0 auto auto;
+            width: 420px;
+            height: 420px;
+            background: radial-gradient(circle, rgba(251, 191, 36, .12), transparent 65%);
+            pointer-events: none;
+            filter: blur(8px);
+        }
+
+        .stage-topbar,
+        .stage-shell,
+        .stage-sponsors {
+            border: 1px solid var(--stage-line);
+            background: linear-gradient(180deg, rgba(8, 15, 30, .90), rgba(6, 11, 23, .84));
+            box-shadow: 0 24px 80px rgba(0, 0, 0, .35);
+        }
+
+        .stage-topbar {
+            position: relative;
+            overflow: hidden;
+            border-radius: 22px;
+            min-height: 96px;
+            padding: 12px 18px;
+            display: block;
+        }
+
+        .stage-topbar::after {
+            content: "";
+            position: absolute;
+            inset: auto -80px -90px auto;
+            width: 280px;
+            height: 280px;
+            background: radial-gradient(circle, rgba(34, 197, 94, .20), transparent 62%);
+            pointer-events: none;
+        }
+
+        .eyebrow {
+            font-family: "Manrope", sans-serif;
+            letter-spacing: .18em;
+            text-transform: uppercase;
+            color: var(--stage-muted);
+            font-size: .76rem;
+            font-weight: 800;
+        }
+
+        .stage-heading {
+            padding-right: 520px;
+        }
+
+        .stage-title {
+            margin: 0;
+            font-family: "Bebas Neue", sans-serif;
+            font-size: 3.65rem;
+            line-height: .88;
+            letter-spacing: 0;
+        }
+
+        .stage-sub {
+            font-family: "Manrope", sans-serif;
+            color: rgba(241, 245, 249, .84);
+            font-size: .9rem;
+            margin-top: 2px;
+        }
+
+        .stage-chips {
+            display: flex;
+            flex-wrap: nowrap;
+            justify-content: flex-start;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .stage-right {
+            position: absolute;
+            top: 14px;
+            right: 18px;
+            z-index: 5;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+            flex-wrap: nowrap;
+        }
+
+        .stage-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: .45rem;
+            border-radius: 999px;
+            border: 1px solid var(--stage-line);
+            padding: .36rem .68rem;
+            background: rgba(255, 255, 255, .05);
+            font-family: "Manrope", sans-serif;
+            font-size: .8rem;
+            font-weight: 800;
+            color: rgba(241, 245, 249, .94);
+            white-space: nowrap;
+        }
+
+        .stage-chip strong {
+            color: #fff;
+        }
+
+        .status-live {
+            border-color: rgba(34, 197, 94, .42);
+            background: rgba(34, 197, 94, .14);
+            color: #bbf7d0;
+        }
+
+        .status-ended {
+            border-color: rgba(251, 191, 36, .35);
+            background: rgba(251, 191, 36, .12);
+            color: #fde68a;
+        }
+
+        .top-actions {
+            display: flex;
+            flex-wrap: nowrap;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .stage-btn {
+            border: 1px solid rgba(255, 255, 255, .18);
+            background: rgba(255, 255, 255, .06);
+            color: rgba(241, 245, 249, .94);
+            font-family: "Manrope", sans-serif;
+            font-weight: 800;
+            border-radius: 12px;
+            padding: .48rem .78rem;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .stage-btn:hover {
+            background: rgba(255, 255, 255, .10);
+            color: #fff;
+        }
+
+        .stage-btn.primary {
+            border: 0;
+            color: #06111f;
+            background: linear-gradient(90deg, #fbbf24, #38bdf8);
+        }
+
+        .stage-shell {
+            position: relative;
+            overflow: hidden;
+            border-radius: 32px;
+            padding: 16px;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .stage-shell::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(120deg, rgba(2, 6, 23, .96), rgba(2, 6, 23, .76)),
+            radial-gradient(circle at 18% 20%, rgba(56, 189, 248, .18), transparent 35%);
+            pointer-events: none;
+        }
+
+        .stage-shell > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .stage-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 14px;
+            min-width: 0;
+        }
+
+        .stack {
+            display: grid;
+            gap: 14px;
+            min-width: 0;
+        }
+
+        .current-lot {
+            display: grid;
+            grid-template-columns: minmax(160px, 260px) minmax(0, 1fr);
+            gap: 16px;
+            align-items: start;
+            min-width: 0;
+        }
+
+        .current-lot > div {
+            min-width: 0;
+        }
+
+        .photo-shell {
+            min-height: 258px;
+            border-radius: 24px;
+            overflow: hidden;
+            background: linear-gradient(180deg, rgba(15, 23, 42, .92), rgba(15, 23, 42, .76)),
+            radial-gradient(circle at top, rgba(56, 189, 248, .15), transparent 50%);
+            border: 1px solid rgba(255, 255, 255, .12);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .photo-shell img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .photo-fallback {
+            font-family: "Bebas Neue", sans-serif;
+            font-size: 2rem;
+            letter-spacing: .08em;
+            color: rgba(255, 255, 255, .55);
+        }
+
+        .lot-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: .6rem;
+            border-radius: 999px;
+            border: 1px solid rgba(251, 191, 36, .30);
+            background: rgba(251, 191, 36, .12);
+            padding: .4rem .72rem;
+            font-family: "Manrope", sans-serif;
+            font-size: .8rem;
+            font-weight: 800;
+            color: #fde68a;
+        }
+
+        .player-name {
+            margin: 9px 0 0;
+            font-family: "Bebas Neue", sans-serif;
+            font-size: 3.65rem;
+            line-height: .9;
+            letter-spacing: 0;
+            overflow-wrap: anywhere;
+        }
+
+        .player-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 9px;
+        }
+
+        .meta-pill {
+            display: inline-flex;
+            align-items: center;
+            padding: .36rem .68rem;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, .12);
+            background: rgba(255, 255, 255, .06);
+            font-family: "Manrope", sans-serif;
+            font-size: .82rem;
+            font-weight: 700;
+            color: rgba(241, 245, 249, .92);
+        }
+
+        .bid-board {
+            margin-top: 12px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .status-card {
+            grid-column: auto;
+        }
+
+        .score-card {
+            border: 1px solid rgba(255, 255, 255, .12);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, .06);
+            padding: 12px;
+            min-height: 102px;
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        .score-label {
+            font-family: "Manrope", sans-serif;
+            text-transform: uppercase;
+            letter-spacing: .14em;
+            font-size: .7rem;
+            color: var(--stage-muted);
+            font-weight: 800;
+        }
+
+        .score-value {
+            font-family: "Bebas Neue", sans-serif;
+            font-size: 2.62rem;
+            line-height: .92;
+            margin-top: 8px;
+            letter-spacing: 0;
+            overflow-wrap: anywhere;
+        }
+
+        .score-value.amount-value {
+            white-space: nowrap;
+            font-size: 2.62rem;
+        }
+
+        .score-value.status-value {
+            font-size: 2.18rem;
+        }
+
+        .score-sub {
+            font-family: "Manrope", sans-serif;
+            font-size: .8rem;
+            color: rgba(241, 245, 249, .82);
+            margin-top: 6px;
+            overflow-wrap: anywhere;
+        }
+
+        #leadingTeamValue,
+        #appearanceValue {
+            word-break: break-word;
+        }
+
+        .leader-card {
+            background: linear-gradient(135deg, rgba(34, 197, 94, .16), rgba(56, 189, 248, .12));
+        }
+
+        .spotlight-card,
+        .events-card,
+        .board-card {
+            border: 1px solid rgba(255, 255, 255, .12);
+            border-radius: 22px;
+            background: rgba(255, 255, 255, .05);
+            padding: 14px;
+        }
+
+        .stage-focus-row {
+            display: grid;
+            grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr);
+            gap: 14px;
+            align-items: start;
+            margin-top: 14px;
+            min-width: 0;
+        }
+
+        .section-title {
+            margin: 0;
+            font-family: "Bebas Neue", sans-serif;
+            font-size: 1.7rem;
+            letter-spacing: .06em;
+        }
+
+        .section-sub {
+            font-family: "Manrope", sans-serif;
+            color: var(--stage-muted);
+            font-size: .82rem;
+            margin-top: 2px;
+        }
+
+        .spotlight-sale {
+            margin-top: 10px;
+            border-radius: 18px;
+            padding: 12px;
+            background: linear-gradient(145deg, rgba(15, 23, 42, .92), rgba(15, 23, 42, .72));
+            border: 1px solid rgba(255, 255, 255, .10);
+        }
+
+        .sale-label {
+            font-family: "Manrope", sans-serif;
+            text-transform: uppercase;
+            letter-spacing: .16em;
+            font-size: .76rem;
+            font-weight: 800;
+            color: #bbf7d0;
+        }
+
+        .sale-player {
+            margin-top: 7px;
+            font-family: "Bebas Neue", sans-serif;
+            font-size: clamp(2rem, 3.2vw, 3.1rem);
+            line-height: .9;
+            letter-spacing: .04em;
+        }
+
+        .sale-team {
+            margin-top: 4px;
+            font-family: "Manrope", sans-serif;
+            font-size: .96rem;
+            font-weight: 800;
+            color: rgba(241, 245, 249, .94);
+        }
+
+        .sale-price {
+            margin-top: 8px;
+            font-family: "Bebas Neue", sans-serif;
+            font-size: clamp(2.2rem, 3.4vw, 3.3rem);
+            color: #fde68a;
+            line-height: .92;
+            letter-spacing: .05em;
+            overflow-wrap: anywhere;
+        }
+
+        .highest-sold {
+            margin-top: 9px;
+            padding-top: 9px;
+            border-top: 1px solid rgba(255, 255, 255, .10);
+            font-family: "Manrope", sans-serif;
+        }
+
+        .highest-sold strong {
+            color: #fff;
+        }
+
+        .board-grid {
+            margin-top: 16px;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .team-tile {
+            border-radius: 22px;
+            border: 1px solid rgba(255, 255, 255, .10);
+            padding: 14px;
+            background: linear-gradient(145deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .03));
+            min-height: 140px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .team-tile::before {
+            content: "";
+            position: absolute;
+            inset: auto -40px -60px auto;
+            width: 170px;
+            height: 170px;
+            background: radial-gradient(circle, rgba(255, 255, 255, .12), transparent 62%);
+            pointer-events: none;
+        }
+
+        .team-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .team-name {
+            font-family: "Bebas Neue", sans-serif;
+            font-size: 2rem;
+            line-height: .95;
+            letter-spacing: .05em;
+            margin: 0;
+            overflow-wrap: anywhere;
+        }
+
+        .team-short {
+            font-family: "Manrope", sans-serif;
+            font-size: .82rem;
+            font-weight: 800;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            color: rgba(241, 245, 249, .75);
+        }
+
+        .team-stat-row {
+            margin-top: 12px;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .team-stat {
+            border-radius: 16px;
+            background: rgba(2, 6, 23, .22);
+            border: 1px solid rgba(255, 255, 255, .08);
+            padding: 10px;
+        }
+
+        .team-stat .label {
+            font-family: "Manrope", sans-serif;
+            text-transform: uppercase;
+            letter-spacing: .10em;
+            font-size: .68rem;
+            color: rgba(241, 245, 249, .65);
+            font-weight: 800;
+        }
+
+        .team-stat .value {
+            margin-top: 6px;
+            font-family: "Bebas Neue", sans-serif;
+            font-size: 1.5rem;
+            line-height: .9;
+            white-space: nowrap;
+        }
+
+        .team-last-buy {
+            margin-top: 12px;
+            font-family: "Manrope", sans-serif;
+            font-size: .88rem;
+            color: rgba(241, 245, 249, .86);
+        }
+
+        .events-list {
+            margin-top: 10px;
+            display: grid;
+            gap: 8px;
+            max-height: 212px;
+            overflow: hidden;
+        }
+
+        .event-row {
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, .10);
+            background: rgba(255, 255, 255, .05);
+            padding: 9px 11px;
+        }
+
+        .event-row.level-sold {
+            background: rgba(34, 197, 94, .14);
+            border-color: rgba(34, 197, 94, .26);
+        }
+
+        .event-row.level-bid {
+            background: rgba(56, 189, 248, .10);
+            border-color: rgba(56, 189, 248, .22);
+        }
+
+        .event-row.level-milestone {
+            background: rgba(251, 191, 36, .12);
+            border-color: rgba(251, 191, 36, .22);
+        }
+
+        .event-main {
+            font-family: "Manrope", sans-serif;
+            font-size: .88rem;
+            font-weight: 700;
+            color: rgba(248, 250, 252, .94);
+        }
+
+        .event-meta {
+            margin-top: 4px;
+            font-family: "Manrope", sans-serif;
+            font-size: .72rem;
+            color: rgba(241, 245, 249, .64);
+            letter-spacing: .05em;
+            text-transform: uppercase;
+        }
+
+        .stage-live-strip {
+            border: 1px solid var(--stage-line);
+            background: linear-gradient(180deg, rgba(8, 15, 30, .90), rgba(6, 11, 23, .84));
+            box-shadow: 0 24px 80px rgba(0, 0, 0, .28);
+            border-radius: 16px;
+            padding: 6px 10px;
+        }
+
+        .stage-sponsors {
+            border-radius: 26px;
+            padding: 18px;
+            display: grid;
+            grid-template-columns: minmax(0, .95fr) minmax(0, 1.2fr);
+            gap: 14px;
+            align-items: stretch;
+        }
+
+        .sponsor-card {
+            border: 1px solid rgba(255, 255, 255, .10);
+            border-radius: 22px;
+            min-height: 116px;
+            padding: 16px;
+            background: rgba(255, 255, 255, .05);
+            position: relative;
+            overflow: hidden;
+            min-width: 0;
+        }
+
+        .sponsor-card.banner {
+            background-size: cover;
+            background-position: center;
+        }
+
+        .sponsor-card.banner::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(120deg, rgba(2, 6, 23, .90), rgba(2, 6, 23, .46));
+        }
+
+        .sponsor-card > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .sponsor-label {
+            font-family: "Manrope", sans-serif;
+            text-transform: uppercase;
+            letter-spacing: .16em;
+            font-size: .74rem;
+            font-weight: 800;
+            color: var(--stage-muted);
+        }
+
+        .sponsor-value {
+            margin-top: 8px;
+            font-family: "Bebas Neue", sans-serif;
+            font-size: 2.2rem;
+            line-height: .95;
+            letter-spacing: .05em;
+        }
+
+        .tracker-card {
+            display: grid;
+            gap: 12px;
+        }
+
+        .tracker-strip {
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+            min-height: 38px;
+            display: flex;
+            align-items: center;
+            border: 1px solid rgba(255, 255, 255, .10);
+            background: linear-gradient(145deg, rgba(12, 24, 45, .84), rgba(8, 16, 30, .82));
+        }
+
+        .tracker-label {
+            flex: 0 0 auto;
+            align-self: stretch;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            background: linear-gradient(90deg, rgba(251, 191, 36, .95), rgba(249, 115, 22, .95));
+            color: #06111f;
+            font-family: "Manrope", sans-serif;
+            font-size: .72rem;
+            font-weight: 900;
+            letter-spacing: .16em;
+            text-transform: uppercase;
+        }
+
+        .ticker-track-wrap {
+            position: relative;
+            overflow: hidden;
+            width: 100%;
+            min-width: 0;
+        }
+
+        .ticker-track {
+            white-space: nowrap;
+            display: inline-block;
+            min-width: 100%;
+            padding-left: 100%;
+            animation: tickerMove 34s linear infinite;
+            font-family: "Manrope", sans-serif;
+            font-size: .82rem;
+            font-weight: 700;
+            color: rgba(248, 250, 252, .94);
+        }
+
+        @keyframes tickerMove {
+            0% {
+                transform: translateX(0);
+            }
+            100% {
+                transform: translateX(-100%);
+            }
+        }
+
+        .sale-flash {
+            position: fixed;
+            inset: 24px;
+            border-radius: 32px;
+            padding: 28px;
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+            border: 1px solid rgba(255, 255, 255, .16);
+            box-shadow: 0 30px 120px rgba(0, 0, 0, .44);
+            z-index: 20;
+            backdrop-filter: blur(10px);
+        }
+
+        .sale-flash.show {
+            display: flex;
+            animation: saleBurst 3.2s ease both;
+        }
+
+        .sale-flash-copy {
+            max-width: 70%;
+        }
+
+        .sale-flash-tag {
+            font-family: "Manrope", sans-serif;
+            text-transform: uppercase;
+            letter-spacing: .18em;
+            font-size: .78rem;
+            font-weight: 900;
+            color: rgba(255, 255, 255, .86);
+        }
+
+        .sale-flash-player {
+            margin-top: 10px;
+            font-family: "Bebas Neue", sans-serif;
+            font-size: clamp(3rem, 7vw, 7rem);
+            line-height: .88;
+            letter-spacing: .04em;
+        }
+
+        .sale-flash-meta {
+            margin-top: 8px;
+            font-family: "Manrope", sans-serif;
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: rgba(255, 255, 255, .92);
+        }
+
+        .sale-flash-price {
+            font-family: "Bebas Neue", sans-serif;
+            font-size: clamp(4rem, 8vw, 7rem);
+            color: #fff5c2;
+            letter-spacing: .05em;
+            line-height: .88;
+        }
+
+        @keyframes saleBurst {
+            0% {
+                opacity: 0;
+                transform: scale(.96);
+            }
+            12% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            84% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(1.02);
+            }
+        }
+
+        @media (max-width: 1200px) {
+            .stage-grid,
+            .current-lot,
+            .stage-focus-row,
+            .stage-sponsors {
+                grid-template-columns: 1fr;
+            }
+
+            .bid-board,
+            .board-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stage-right {
+                width: 100%;
+                position: static;
+                justify-content: flex-start;
+                flex-wrap: wrap;
+                margin-top: 10px;
+            }
+
+            .stage-heading {
+                padding-right: 0;
+            }
+
+            .stage-chips,
+            .top-actions {
+                justify-content: flex-start;
+            }
+
+            .sale-flash {
+                inset: 12px;
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .sale-flash-copy {
+                max-width: none;
+            }
+        }
+
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div class="stage-page">
+        <div class="stage-topbar">
+            <div class="stage-heading">
+                <div class="eyebrow">{{ tournament.season_year }} Auction Stage</div>
+                <h1 class="stage-title">{{ tournament.name }}</h1>
+                <div class="stage-sub">
+                    {% if tournament.city %}{{ tournament.city }}{% endif %}
+                    {% if tournament.venue %}{% if tournament.city %} | {% endif %}{{ tournament.venue }}{% endif %}
+                </div>
+            </div>
+            <div class="stage-right">
+                <div class="stage-chips">
+                    <span id="statusChip" class="stage-chip status-live">Status <strong>{% if snapshot %}
+                        {{ snapshot.status_display }}{% elif auction %}{{ auction.get_status_display }}{% else %}No
+                        Auction{% endif %}</strong></span>
+                    <span class="stage-chip">Sold <strong id="soldCountChip">{% if snapshot %}
+                        {{ snapshot.sold_total }}{% else %}0{% endif %}</strong></span>
+                    <span class="stage-chip">Remaining <strong id="remainingCountChip">{% if snapshot %}
+                        {{ snapshot.unsold_total }}{% else %}0{% endif %}</strong></span>
+                </div>
+                <div class="top-actions">
+                    <button type="button" class="stage-btn primary" id="enterFullscreen">Fullscreen</button>
+                </div>
+            </div>
+        </div>
+
+        {% if not auction %}
+            <div class="stage-live-strip">
+                <div class="tracker-strip">
+                    <div class="tracker-label">Live</div>
+                    <div class="ticker-track-wrap">
+                        <div class="ticker-track">Stage feed will appear here once the auction starts.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="stage-shell">
+                <div class="spotlight-card">
+                    <div class="section-title">No Auction Found</div>
+                    <div class="section-sub">Create auction lots first, then the stage screen will go live here.</div>
+                </div>
+            </div>
+        {% else %}
+            <div class="stage-live-strip">
+                <div class="tracker-strip">
+                    <div class="tracker-label">Live</div>
+                    <div class="ticker-track-wrap">
+                        <div id="tickerTrack" class="ticker-track">Stage feed loading...</div>
+                    </div>
+                </div>
+            </div>
+            <div id="stageShell" class="stage-shell"{% if snapshot and snapshot.banner %}
+                 style="background-image:url('{{ snapshot.banner }}');"{% endif %}>
+                <div class="stage-grid">
+                    <div class="stack">
+                        <div class="current-lot">
+                            <div class="photo-shell" id="playerPhotoShell">
+                                <div class="photo-fallback">Awaiting Lot</div>
+                            </div>
+                            <div>
+                                <div id="lotKicker" class="lot-kicker">Awaiting live lot</div>
+                                <h2 id="playerName" class="player-name">Auction Stage Ready</h2>
+                                <div id="playerMeta" class="player-meta"></div>
+
+                                <div class="bid-board">
+                                    <div class="score-card">
+                                        <div class="score-label">Base Price</div>
+                                        <div id="basePriceValue" class="score-value amount-value">&mdash;</div>
+                                        <div id="basePriceSub" class="score-sub">Opening bid line</div>
+                                    </div>
+                                    <div class="score-card leader-card">
+                                        <div class="score-label">Current Bid</div>
+                                        <div id="currentBidValue" class="score-value amount-value">&mdash;</div>
+                                        <div id="leadingTeamValue" class="score-sub">No bids yet</div>
+                                    </div>
+                                    <div class="score-card status-card">
+                                        <div class="score-label">Lot Status</div>
+                                        <div id="lotStatusValue" class="score-value status-value">&mdash;</div>
+                                        <div id="appearanceValue" class="score-sub">Waiting for auction flow</div>
+                                    </div>
+                                </div>
+
+                                <div class="stage-focus-row">
+                                    <div class="spotlight-card">
+                                        <div class="section-title">Sold Spotlight</div>
+                                        <div class="section-sub">Latest hammer result with the best buy still highlighted.</div>
+                                        <div id="latestSaleCard" class="spotlight-sale">
+                                            <div class="sale-label">No sale yet</div>
+                                            <div class="sale-player">Waiting for first sold player</div>
+                                            <div class="sale-team">Stage spotlight will update automatically.</div>
+                                            <div class="sale-price">&mdash;</div>
+                                        </div>
+                                        <div id="highestSoldWrap" class="highest-sold"></div>
+                                    </div>
+
+                                    <div class="events-card">
+                                        <div class="section-title">Recent Events</div>
+                                        <div class="section-sub">Fast event strip for emcee and audience context.</div>
+                                        <div id="recentEvents" class="events-list"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="board-card">
+                            <div class="section-title">Team Board</div>
+                            <div class="section-sub">Live purse and squad view for the projector screen.</div>
+                            <div id="leaderboardGrid" class="board-grid"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stage-sponsors">
+                <div class="sponsor-card">
+                    <div class="sponsor-label">Info Banner</div>
+                    <div class="sponsor-value">{{ tournament.venue|default:tournament.name }}</div>
+                    <div class="section-sub">
+                        {% if tournament.city %}{{ tournament.city }}{% else %}Live auction room{% endif %}
+                        {% if tournament.season_year %} | {{ tournament.season_year }}{% endif %}
+                    </div>
+                    <div class="section-sub" style="margin-top:10px;">Presented by SS Cricket</div>
+                </div>
+                <div id="bannerZone" class="sponsor-card banner"{% if snapshot and snapshot.banner %}
+                     style="background-image:url('{{ snapshot.banner }}');"{% endif %}>
+                    <div class="sponsor-label">Auction Banner</div>
+                    <div class="sponsor-value">{{ tournament.name }}</div>
+                    <div class="section-sub">Use the auction banner for projector-ready branding.</div>
+                </div>
+            </div>
+
+            <div id="saleFlash" class="sale-flash">
+                <div class="sale-flash-copy">
+                    <div class="sale-flash-tag">Sold</div>
+                    <div id="saleFlashPlayer" class="sale-flash-player"></div>
+                    <div id="saleFlashMeta" class="sale-flash-meta"></div>
+                </div>
+                <div id="saleFlashPrice" class="sale-flash-price"></div>
+            </div>
+
+            {{ snapshot|json_script:"stageSnapshotData" }}
+        {% endif %}
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    {% if auction %}
+        <script>
+            (function () {
+                const shell = document.getElementById("stageShell");
+                const saleFlash = document.getElementById("saleFlash");
+                const saleFlashPlayer = document.getElementById("saleFlashPlayer");
+                const saleFlashMeta = document.getElementById("saleFlashMeta");
+                const saleFlashPrice = document.getElementById("saleFlashPrice");
+                const photoShell = document.getElementById("playerPhotoShell");
+                const lotKicker = document.getElementById("lotKicker");
+                const playerName = document.getElementById("playerName");
+                const playerMeta = document.getElementById("playerMeta");
+                const basePriceValue = document.getElementById("basePriceValue");
+                const basePriceSub = document.getElementById("basePriceSub");
+                const currentBidValue = document.getElementById("currentBidValue");
+                const leadingTeamValue = document.getElementById("leadingTeamValue");
+                const lotStatusValue = document.getElementById("lotStatusValue");
+                const appearanceValue = document.getElementById("appearanceValue");
+                const latestSaleCard = document.getElementById("latestSaleCard");
+                const highestSoldWrap = document.getElementById("highestSoldWrap");
+                const leaderboardGrid = document.getElementById("leaderboardGrid");
+                const recentEvents = document.getElementById("recentEvents");
+                const tickerTrack = document.getElementById("tickerTrack");
+                const soldCountChip = document.getElementById("soldCountChip");
+                const remainingCountChip = document.getElementById("remainingCountChip");
+                const statusChip = document.getElementById("statusChip");
+                const bannerZone = document.getElementById("bannerZone");
+                const fullBtn = document.getElementById("enterFullscreen");
+
+                const snapshotEl = document.getElementById("stageSnapshotData");
+                const initialSnapshot = snapshotEl ? JSON.parse(snapshotEl.textContent) : null;
+
+                let lastId = 0;
+                let latestSaleId = initialSnapshot && initialSnapshot.latest_sale ? initialSnapshot.latest_sale.id : null;
+                let recentEventItems = [];
+
+                function formatCompactAmount(amount) {
+                    const value = Number(amount || 0);
+                    if (!Number.isFinite(value) || value <= 0) return "-";
+
+                    const trim = (num) => {
+                        if (Number.isInteger(num)) return String(num);
+                        return num.toFixed(1).replace(/\.0$/, "");
+                    };
+
+                    if (value >= 10000000) return `₹ ${trim(value / 10000000)}Cr`;
+                    if (value >= 100000) return `₹ ${trim(value / 100000)}L`;
+                    if (value >= 1000) return `₹ ${trim(value / 1000)}K`;
+                    return `₹ ${Math.round(value).toLocaleString("en-IN")}`;
+                }
+
+                function badge(text) {
+                    const span = document.createElement("span");
+                    span.className = "meta-pill";
+                    span.textContent = text;
+                    return span;
+                }
+
+                function setStatusChip(snapshot) {
+                    if (!statusChip || !snapshot) return;
+                    statusChip.classList.toggle("status-ended", !!snapshot.auction_completed);
+                    statusChip.classList.toggle("status-live", !snapshot.auction_completed);
+                    statusChip.innerHTML = `Status <strong>${snapshot.status_display || "Live"}</strong>`;
+                }
+
+                function renderCurrentLot(currentLot, snapshot) {
+                    if (!currentLot) {
+                        photoShell.innerHTML = '<div class="photo-fallback">Awaiting Lot</div>';
+                        lotKicker.textContent = snapshot && snapshot.auction_completed ? "Auction completed" : "Awaiting live lot";
+                        playerName.textContent = snapshot && snapshot.auction_completed ? "Auction Closed" : "Auction Stage Ready";
+                        playerMeta.innerHTML = "";
+                        basePriceValue.textContent = "-";
+                        basePriceSub.textContent = "Opening bid line";
+                        currentBidValue.textContent = "-";
+                        leadingTeamValue.textContent = "No bids yet";
+                        lotStatusValue.textContent = snapshot && snapshot.status_display ? snapshot.status_display : "-";
+                        appearanceValue.textContent = snapshot && snapshot.auction_completed ? "All open lots completed" : "Waiting for auction flow";
+                        return;
+                    }
+
+                    if (currentLot.player && currentLot.player.photo) {
+                        photoShell.innerHTML = `<img src="${currentLot.player.photo}" alt="${currentLot.player.name}">`;
+                    } else {
+                        photoShell.innerHTML = `<div class="photo-fallback">${currentLot.player ? currentLot.player.name : "Awaiting Lot"}</div>`;
+                    }
+
+                    lotKicker.textContent = `Lot #${currentLot.lot_no} | Entry ${currentLot.appearance_no}`;
+                    playerName.textContent = currentLot.player ? currentLot.player.name : "Awaiting Player";
+
+                    playerMeta.innerHTML = "";
+                    const metaItems = [];
+                    if (currentLot.player && currentLot.player.role) metaItems.push(currentLot.player.role);
+                    if (currentLot.player && currentLot.player.city) metaItems.push(currentLot.player.city);
+                    if (currentLot.player && currentLot.player.age) metaItems.push(`${currentLot.player.age} yrs`);
+                    if (currentLot.player && currentLot.player.batting_style) metaItems.push(currentLot.player.batting_style);
+                    if (currentLot.player && currentLot.player.bowling_style) metaItems.push(currentLot.player.bowling_style);
+                    if (!metaItems.length) metaItems.push("Live player spotlight");
+                    metaItems.forEach((item) => playerMeta.appendChild(badge(item)));
+
+                    basePriceValue.textContent = formatCompactAmount(currentLot.base_price);
+                    basePriceSub.textContent = currentLot.base_price_display || "Opening bid line";
+                    currentBidValue.textContent = formatCompactAmount(currentLot.current_bid);
+                    if (currentLot.leading_team) {
+                        leadingTeamValue.textContent = `Leading: ${currentLot.leading_team.name} | ${currentLot.current_bid_display || "-"}`;
+                    } else {
+                        leadingTeamValue.textContent = currentLot.current_bid_display || "No bids yet";
+                    }
+                    lotStatusValue.textContent = (currentLot.status || "-").replaceAll("_", " ");
+                    appearanceValue.textContent = `Auction flow ${currentLot.appearance_no} of live sequence`;
+                }
+
+                function renderLatestSale(latestSale) {
+                    if (!latestSale) {
+                        latestSaleCard.style.background = "linear-gradient(145deg, rgba(15,23,42,.92), rgba(15,23,42,.72))";
+                        latestSaleCard.innerHTML = `
+          <div class="sale-label">No sale yet</div>
+          <div class="sale-player">Waiting for first sold player</div>
+          <div class="sale-team">Stage spotlight will update automatically.</div>
+          <div class="sale-price">&mdash;</div>
+        `;
+                        return;
+                    }
+
+                    latestSaleCard.style.background = `linear-gradient(140deg, ${latestSale.primary_color || "#0F172A"}, ${latestSale.secondary_color || "#22C55E"})`;
+                    latestSaleCard.innerHTML = `
+        <div class="sale-label">Latest Hammer | Lot ${latestSale.lot_no || "-"}</div>
+        <div class="sale-player">${latestSale.player || ""}</div>
+        <div class="sale-team">${latestSale.team || ""}</div>
+        <div class="sale-price">${formatCompactAmount(latestSale.price)}</div>
+      `;
+                }
+
+                function renderHighestSold(highestSold) {
+                    if (!highestSoldWrap) return;
+                    if (!highestSold) {
+                        highestSoldWrap.innerHTML = '<span class="section-sub">No highest sold marker yet.</span>';
+                        return;
+                    }
+
+                    highestSoldWrap.innerHTML = `
+        Highest sold so far: <strong>${highestSold.player}</strong>
+        to <strong>${highestSold.team || "TBD"}</strong>
+        for <strong>${highestSold.price_display || "-"}</strong>
+        in Lot ${highestSold.lot_no || "-"}.
+      `;
+                }
+
+                function renderLeaderboard(teams) {
+                    if (!leaderboardGrid) return;
+                    if (!teams || !teams.length) {
+                        leaderboardGrid.innerHTML = '<div class="section-sub">No active teams yet.</div>';
+                        return;
+                    }
+
+                    leaderboardGrid.innerHTML = teams.map((team) => {
+                        const lastBuy = team.last_buy
+                            ? `${team.last_buy.player} | ${formatCompactAmount(team.last_buy.price)}`
+                            : "No completed buy yet";
+                        const maxPlayers = team.max_players ? ` / ${team.max_players}` : "";
+                        const slotsRemaining = team.slots_remaining === "" ? "-" : team.slots_remaining;
+                        return `
+          <div class="team-tile" style="background:linear-gradient(145deg, ${team.primary_color || "#0F172A"}cc, ${team.secondary_color || "#22C55E"}88);">
+            <div class="team-head">
+              <div>
+                <div class="team-short">${team.short_name || ""}</div>
+                <h3 class="team-name">${team.name}</h3>
+              </div>
+            </div>
+            <div class="team-stat-row">
+              <div class="team-stat">
+                <div class="label">Purse Left</div>
+                <div class="value">${formatCompactAmount(team.purse_remaining)}</div>
+              </div>
+              <div class="team-stat">
+                <div class="label">Squad</div>
+                <div class="value">${team.squad_count || 0}${maxPlayers}</div>
+              </div>
+              <div class="team-stat">
+                <div class="label">Spent</div>
+                <div class="value">${formatCompactAmount(team.spent)}</div>
+              </div>
+              <div class="team-stat">
+                <div class="label">Slots Left</div>
+                <div class="value">${slotsRemaining}</div>
+              </div>
+            </div>
+            <div class="team-last-buy">${lastBuy}</div>
+          </div>
+        `;
+                    }).join("");
+                }
+
+                function renderEvents() {
+                    if (!recentEvents) return;
+                    if (!recentEventItems.length) {
+                        recentEvents.innerHTML = '<div class="section-sub">Waiting for live auction activity.</div>';
+                        return;
+                    }
+
+                    recentEvents.innerHTML = recentEventItems.slice(0, 8).map((event) => `
+        <div class="event-row level-${String(event.level || "info").toLowerCase()}">
+          <div class="event-main">${event.message || ""}</div>
+          <div class="event-meta">${event.time || ""}${event.lot_no ? ` | Lot ${event.lot_no}` : ""}</div>
+        </div>
+      `).join("");
+
+                    const tickerMessages = recentEventItems.slice(0, 12).map((event) => {
+                        return `${event.time || ""} | ${event.message || ""}`;
+                    });
+                    tickerTrack.textContent = tickerMessages.length ? tickerMessages.join("   |   ") : "Waiting for live auction activity.";
+                }
+
+                function upsertEvents(events) {
+                    if (!events || !events.length) return;
+                    const seen = new Map(recentEventItems.map((event) => [event.id, event]));
+                    events.forEach((event) => {
+                        if (!event || !event.id) return;
+                        seen.set(event.id, event);
+                        lastId = Math.max(lastId, Number(event.id) || 0);
+                    });
+                    recentEventItems = Array.from(seen.values()).sort((a, b) => Number(b.id) - Number(a.id));
+                    renderEvents();
+                }
+
+                function renderSnapshot(snapshot) {
+                    if (!snapshot) return;
+                    soldCountChip.textContent = snapshot.sold_total ?? 0;
+                    remainingCountChip.textContent = snapshot.unsold_total ?? 0;
+                    setStatusChip(snapshot);
+                    renderCurrentLot(snapshot.current_lot, snapshot);
+                    renderLatestSale(snapshot.latest_sale);
+                    renderHighestSold(snapshot.highest_sold);
+                    renderLeaderboard(snapshot.leaderboard || []);
+
+                    if (snapshot.banner && shell) {
+                        shell.style.backgroundImage = `url("${snapshot.banner}")`;
+                    }
+                    if (snapshot.banner && bannerZone) {
+                        bannerZone.style.backgroundImage = `url("${snapshot.banner}")`;
+                    }
+                }
+
+                function flashSale(latestSale) {
+                    if (!latestSale || !saleFlash) return;
+                    saleFlash.style.background = `linear-gradient(120deg, ${latestSale.primary_color || "#0F172A"}f2, ${latestSale.secondary_color || "#22C55E"}e6)`;
+                    saleFlashPlayer.textContent = latestSale.player || "";
+                    saleFlashMeta.textContent = `${latestSale.team || ""}${latestSale.lot_no ? ` | Lot ${latestSale.lot_no}` : ""}`;
+                    saleFlashPrice.textContent = formatCompactAmount(latestSale.price);
+                    saleFlash.classList.remove("show");
+                    void saleFlash.offsetWidth;
+                    saleFlash.classList.add("show");
+                }
+
+                async function fetchUpdates() {
+                    try {
+                        const res = await fetch(`{% url 'auction_updates_feed' slug=tournament.slug %}?after=${lastId}&_ts=${Date.now()}`, {
+                            headers: {"X-Requested-With": "XMLHttpRequest"},
+                            cache: "no-store",
+                        });
+                        const out = await res.json().catch(() => ({}));
+                        if (!res.ok || out.ok === false) return;
+
+                        if (Array.isArray(out.events)) {
+                            upsertEvents(out.events);
+                        }
+                        if (out.snapshot) {
+                            const nextSaleId = out.snapshot.latest_sale ? out.snapshot.latest_sale.id : null;
+                            if (latestSaleId !== null && nextSaleId && nextSaleId !== latestSaleId) {
+                                flashSale(out.snapshot.latest_sale);
+                            }
+                            latestSaleId = nextSaleId;
+                            renderSnapshot(out.snapshot);
+                        }
+                    } catch (err) {
+                    }
+                }
+
+                fullBtn?.addEventListener("click", async () => {
+                    try {
+                        if (!document.fullscreenElement) {
+                            await document.documentElement.requestFullscreen();
+                            fullBtn.textContent = "Exit Fullscreen";
+                        } else {
+                            await document.exitFullscreen();
+                            fullBtn.textContent = "Fullscreen";
+                        }
+                    } catch (err) {
+                    }
+                });
+
+                document.addEventListener("fullscreenchange", () => {
+                    if (!fullBtn) return;
+                    fullBtn.textContent = document.fullscreenElement ? "Exit Fullscreen" : "Fullscreen";
+                });
+
+                renderSnapshot(initialSnapshot);
+                fetchUpdates();
+                setInterval(fetchUpdates, 3000);
+            })();
+        </script>
+    {% endif %}
+{% endblock %}

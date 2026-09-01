@@ -1,9 +1,13 @@
+from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator, RegexValidator
 from django.db import models
-
-# Create your models here.
-from django.db import models
-from django.core.validators import MinValueValidator
 from tournaments.models import Tournament
+
+HEX_COLOR_VALIDATOR = RegexValidator(
+    regex=r"^#[0-9A-Fa-f]{6}$",
+    message="Enter a valid hex color like #22C55E.",
+)
 
 
 def team_logo_upload_to(instance, filename: str) -> str:
@@ -21,10 +25,10 @@ def player_payment_screenshot_upload_to(instance, filename: str) -> str:
     return f"players/payments/{instance.tournament_id}/{filename}"
 
 
-
 def auction_banner_upload_to(instance, filename: str) -> str:
     # media/auctions/banners/<tournament_id>/<filename>
     return f"auctions/banners/{instance.tournament_id}/{filename}"
+
 
 class Auction(models.Model):
     """
@@ -72,7 +76,6 @@ class Auction(models.Model):
         ]
 
 
-
 class Team(models.Model):
     tournament = models.ForeignKey(
         Tournament,
@@ -83,6 +86,22 @@ class Team(models.Model):
     name = models.CharField(max_length=120)
     short_name = models.CharField(max_length=12, null=True, blank=True)
     logo = models.ImageField(upload_to=team_logo_upload_to, null=True, blank=True)
+    tagline = models.CharField(max_length=140, blank=True)
+    primary_color = models.CharField(
+        max_length=7,
+        default="#0F172A",
+        validators=[HEX_COLOR_VALIDATOR],
+    )
+    secondary_color = models.CharField(
+        max_length=7,
+        default="#22C55E",
+        validators=[HEX_COLOR_VALIDATOR],
+    )
+    accent_color = models.CharField(
+        max_length=7,
+        default="#F97316",
+        validators=[HEX_COLOR_VALIDATOR],
+    )
 
     purse_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     purse_remaining = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -103,6 +122,109 @@ class Team(models.Model):
         unique_together = (("tournament", "name"),)
         indexes = [
             models.Index(fields=["tournament", "is_active"]),
+        ]
+
+
+class TeamAccess(models.Model):
+    class Role(models.TextChoices):
+        OWNER = "OWNER", "Owner"
+        CO_OWNER = "CO_OWNER", "Co-Owner"
+        ANALYST = "ANALYST", "Analyst"
+        VIEWER = "VIEWER", "Viewer"
+
+    team = models.ForeignKey(
+        Team,
+        on_delete=models.CASCADE,
+        related_name="access_entries",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="team_access_entries",
+    )
+    linked_player = models.ForeignKey(
+        "Player",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="team_access_entries",
+    )
+    role = models.CharField(max_length=16, choices=Role.choices, default=Role.OWNER)
+    is_primary = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        if self.is_primary and not self.is_active:
+            raise ValidationError({"is_active": "Primary access must stay active."})
+
+        if self.linked_player_id and self.team_id and self.linked_player.tournament_id != self.team.tournament_id:
+            raise ValidationError({"linked_player": "Linked player must belong to the same tournament as the team."})
+
+        if self.is_primary and self.team_id:
+            existing_primary = TeamAccess.objects.filter(
+                team_id=self.team_id,
+                is_primary=True,
+                is_active=True,
+            ).exclude(pk=self.pk)
+            if existing_primary.exists():
+                raise ValidationError({"is_primary": "This team already has an active primary access entry."})
+
+    def __str__(self) -> str:
+        return f"{self.team} - {self.user} ({self.get_role_display()})"
+
+    class Meta:
+        db_table = "team_access"
+        unique_together = (("team", "user"),)
+        indexes = [
+            models.Index(fields=["team", "is_active"]),
+            models.Index(fields=["user", "is_active"]),
+        ]
+
+
+class TeamWatchlist(models.Model):
+    class Priority(models.TextChoices):
+        HIGH = "HIGH", "High"
+        MEDIUM = "MEDIUM", "Medium"
+        LOW = "LOW", "Low"
+
+    team = models.ForeignKey(
+        Team,
+        on_delete=models.CASCADE,
+        related_name="watchlist_entries",
+    )
+    player = models.ForeignKey(
+        "Player",
+        on_delete=models.CASCADE,
+        related_name="watchlist_entries",
+    )
+    added_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_watchlist_entries",
+    )
+    priority = models.CharField(max_length=8, choices=Priority.choices, default=Priority.MEDIUM)
+    note = models.CharField(max_length=180, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        if self.team_id and self.player_id and self.player.tournament_id != self.team.tournament_id:
+            raise ValidationError({"player": "Watchlist player must belong to the same tournament as the team."})
+
+    def __str__(self) -> str:
+        return f"{self.team} watchlist - {self.player}"
+
+    class Meta:
+        db_table = "team_watchlist"
+        unique_together = (("team", "player"),)
+        indexes = [
+            models.Index(fields=["team", "priority"]),
+            models.Index(fields=["player"]),
         ]
 
 
@@ -259,6 +381,7 @@ class AuctionLot(models.Model):
             models.Index(fields=["auction", "status"]),
             models.Index(fields=["auction", "lot_no", "lot_order"]),
         ]
+
 
 class AuctionEvent(models.Model):
     class Level(models.TextChoices):

@@ -262,6 +262,276 @@ def _appearance_no(lot: AuctionLot) -> int:
     return before.count() + 1
 
 
+def _current_lot_for_auction(auction: Auction):
+    # Keep auction consistent with team assignments before selecting the live lot.
+    _withdraw_open_lots_for_assigned_players(auction)
+    _relist_restricted_unsold_if_needed(auction)
+    restricted_lot_no, auction_rules_config = _active_restricted_lot(auction)
+
+    lot_scope = AuctionLot.objects.filter(auction=auction)
+    if restricted_lot_no:
+        lot_scope = lot_scope.filter(lot_no=restricted_lot_no)
+
+    current_lot = (
+        lot_scope.filter(status=AuctionLot.Status.RUNNING)
+        .select_related("player", "sold_to_team")
+        .order_by("lot_no", "lot_order", "id")
+        .first()
+    )
+    if not current_lot:
+        current_lot = (
+            lot_scope.filter(status=AuctionLot.Status.PENDING)
+            .select_related("player", "sold_to_team")
+            .order_by("lot_no", "lot_order", "id")
+            .first()
+        )
+    if not current_lot:
+        current_lot = (
+            lot_scope.select_related("player", "sold_to_team")
+            .order_by("lot_no", "lot_order", "id")
+            .first()
+        )
+
+    if current_lot and current_lot.status in [AuctionLot.Status.PENDING, AuctionLot.Status.RUNNING]:
+        _ensure_lot_start_event(current_lot)
+
+    return current_lot, auction_rules_config
+
+
+def _auction_completion_summary(auction: Auction) -> dict:
+    open_exists = AuctionLot.objects.filter(
+        auction=auction,
+        status__in=[AuctionLot.Status.PENDING, AuctionLot.Status.RUNNING],
+    ).exists()
+    auction_fully_completed = not AuctionLot.objects.filter(
+        auction=auction,
+        status__in=[
+            AuctionLot.Status.PENDING,
+            AuctionLot.Status.RUNNING,
+            AuctionLot.Status.UNSOLD,
+        ],
+    ).exists()
+
+    sold_total = AuctionLot.objects.filter(auction=auction, status=AuctionLot.Status.SOLD).count()
+    unsold_total = AuctionLot.objects.filter(
+        auction=auction,
+        status__in=[
+            AuctionLot.Status.PENDING,
+            AuctionLot.Status.RUNNING,
+            AuctionLot.Status.UNSOLD,
+        ],
+    ).count()
+
+    top_sold = _get_highest_sold_lot(auction)
+    highest_sold = None
+    if top_sold:
+        highest_sold = {
+            "lot_id": top_sold.id,
+            "lot_no": top_sold.lot_no,
+            "player": top_sold.player.name,
+            "team": top_sold.sold_to_team.name if top_sold.sold_to_team else "",
+            "price": str(top_sold.sold_price or 0),
+            "price_display": _format_amount(top_sold.sold_price or 0),
+        }
+
+    return {
+        "auction_completed": not open_exists,
+        "auction_fully_completed": auction_fully_completed,
+        "sold_total": sold_total,
+        "unsold_total": unsold_total,
+        "highest_sold": highest_sold,
+    }
+
+
+def _serialize_auction_event(event: AuctionEvent) -> dict:
+    return {
+        "id": event.id,
+        "message": event.message,
+        "level": event.level,
+        "event_type": event.event_type,
+        "time": event.created_at.strftime("%H:%M:%S"),
+        "player": event.player.name if event.player_id else "",
+        "team": event.team.name if event.team_id else "",
+        "lot_no": event.lot.lot_no if event.lot_id else None,
+        "amount": str(event.amount or 0),
+        "amount_display": _format_amount(event.amount or 0) if event.amount is not None else "",
+    }
+
+
+def _serialize_stage_team(team: Team, squad_count: int, latest_sale: AuctionEvent | None) -> dict:
+    spent = Decimal(team.purse_total or 0) - Decimal(team.purse_remaining or 0)
+    slots_remaining = ""
+    if team.max_players:
+        slots_remaining = max(team.max_players - squad_count, 0)
+
+    last_buy = None
+    if latest_sale:
+        last_buy = {
+            "player": latest_sale.player.name if latest_sale.player_id else "",
+            "price": str(latest_sale.amount or 0),
+            "price_display": _format_amount(latest_sale.amount or 0),
+            "time": latest_sale.created_at.strftime("%H:%M:%S"),
+        }
+
+    return {
+        "id": team.id,
+        "name": team.name,
+        "short_name": team.short_name or team.name[:3].upper(),
+        "tagline": team.tagline or "",
+        "logo": team.logo.url if team.logo else "",
+        "primary_color": team.primary_color,
+        "secondary_color": team.secondary_color,
+        "accent_color": team.accent_color,
+        "purse_total": str(team.purse_total or 0),
+        "purse_total_display": _format_amount(team.purse_total or 0),
+        "purse_remaining": str(team.purse_remaining or 0),
+        "purse_remaining_display": _format_amount(team.purse_remaining or 0),
+        "spent": str(spent),
+        "spent_display": _format_amount(spent),
+        "squad_count": squad_count,
+        "max_players": team.max_players or "",
+        "slots_remaining": slots_remaining,
+        "last_buy": last_buy,
+    }
+
+
+def _serialize_stage_lot(lot: AuctionLot | None) -> dict | None:
+    if not lot:
+        return None
+
+    current_bid = _get_current_highest(lot)
+    leading_team = _get_highest_team(lot)
+
+    team_payload = None
+    if leading_team:
+        team_payload = {
+            "id": leading_team.id,
+            "name": leading_team.name,
+            "short_name": leading_team.short_name or leading_team.name[:3].upper(),
+            "logo": leading_team.logo.url if leading_team.logo else "",
+            "primary_color": leading_team.primary_color,
+            "secondary_color": leading_team.secondary_color,
+            "accent_color": leading_team.accent_color,
+        }
+
+    return {
+        "id": lot.id,
+        "lot_no": lot.lot_no,
+        "appearance_no": _appearance_no(lot),
+        "status": lot.status,
+        "base_price": str(lot.base_price_snapshot or 0),
+        "base_price_display": _format_amount(lot.base_price_snapshot or 0),
+        "current_bid": str(current_bid or 0),
+        "current_bid_display": _format_amount(current_bid or 0),
+        "leading_team": team_payload,
+        "player": {
+            "id": lot.player_id,
+            "name": lot.player.name,
+            "photo": lot.player.photo.url if lot.player.photo else "",
+            "role": lot.player.get_role_display() if lot.player.role else "",
+            "city": lot.player.city or "",
+            "age": lot.player.age or "",
+            "batting_style": lot.player.batting_style or "",
+            "bowling_style": lot.player.bowling_style or "",
+            "stats": lot.player.stats or {},
+        },
+    }
+
+
+def _latest_sale_payload(auction: Auction) -> dict | None:
+    latest_sale = (
+        AuctionEvent.objects.filter(
+            auction=auction,
+            event_type=AuctionEvent.EventType.SOLD,
+        )
+        .select_related("lot", "player", "team")
+        .order_by("-id")
+        .first()
+    )
+    if not latest_sale:
+        return None
+
+    return {
+        "id": latest_sale.id,
+        "player": latest_sale.player.name if latest_sale.player_id else "",
+        "team": latest_sale.team.name if latest_sale.team_id else "",
+        "team_logo": latest_sale.team.logo.url if latest_sale.team_id and latest_sale.team.logo else "",
+        "primary_color": latest_sale.team.primary_color if latest_sale.team_id else "#0F172A",
+        "secondary_color": latest_sale.team.secondary_color if latest_sale.team_id else "#22C55E",
+        "accent_color": latest_sale.team.accent_color if latest_sale.team_id else "#F97316",
+        "lot_no": latest_sale.lot.lot_no if latest_sale.lot_id else None,
+        "price": str(latest_sale.amount or 0),
+        "price_display": _format_amount(latest_sale.amount or 0),
+        "time": latest_sale.created_at.strftime("%H:%M:%S"),
+    }
+
+
+def _stage_leaderboard(auction: Auction) -> list[dict]:
+    teams = list(auction.tournament.teams.filter(is_active=True).order_by("name"))
+    squad_count_map = {
+        row["team_id"]: row["count"]
+        for row in TeamPlayer.objects.filter(
+            tournament=auction.tournament,
+            status=TeamPlayer.Status.ACTIVE,
+        )
+        .values("team_id")
+        .annotate(count=Count("id"))
+    }
+
+    latest_sales_by_team = {}
+    for event in (
+            AuctionEvent.objects.filter(
+                auction=auction,
+                event_type=AuctionEvent.EventType.SOLD,
+                team__isnull=False,
+            )
+                    .select_related("player", "team")
+                    .order_by("-id")[:200]
+    ):
+        if event.team_id not in latest_sales_by_team:
+            latest_sales_by_team[event.team_id] = event
+        if len(latest_sales_by_team) == len(teams):
+            break
+
+    teams.sort(
+        key=lambda team: (
+            -(squad_count_map.get(team.id, 0)),
+            Decimal(team.purse_remaining or 0),
+            team.name.lower(),
+        )
+    )
+
+    return [
+        _serialize_stage_team(
+            team=team,
+            squad_count=squad_count_map.get(team.id, 0),
+            latest_sale=latest_sales_by_team.get(team.id),
+        )
+        for team in teams
+    ]
+
+
+def _public_auction_snapshot(auction: Auction) -> dict:
+    current_lot, _auction_rules_config = _current_lot_for_auction(auction)
+    completion = _auction_completion_summary(auction)
+    return {
+        "auction_id": auction.id,
+        "auction_name": auction.name,
+        "auction_code": auction.code,
+        "status": auction.status,
+        "status_display": auction.get_status_display(),
+        "banner": auction.banner.url if auction.banner else "",
+        "current_lot": _serialize_stage_lot(current_lot),
+        "latest_sale": _latest_sale_payload(auction),
+        "highest_sold": completion["highest_sold"],
+        "sold_total": completion["sold_total"],
+        "unsold_total": completion["unsold_total"],
+        "auction_completed": completion["auction_completed"],
+        "auction_fully_completed": completion["auction_fully_completed"],
+        "leaderboard": _stage_leaderboard(auction),
+    }
+
+
 def _format_amount(amount) -> str:
     if amount is None:
         return ""
@@ -269,15 +539,15 @@ def _format_amount(amount) -> str:
 
 
 def _log_event(
-    *,
-    auction: Auction,
-    event_type: str,
-    level: str,
-    message: str,
-    lot: AuctionLot | None = None,
-    team: Team | None = None,
-    player=None,
-    amount=None,
+        *,
+        auction: Auction,
+        event_type: str,
+        level: str,
+        message: str,
+        lot: AuctionLot | None = None,
+        team: Team | None = None,
+        player=None,
+        amount=None,
 ):
     return AuctionEvent.objects.create(
         auction=auction,
@@ -329,6 +599,7 @@ def _maybe_log_milestone(lot: AuctionLot, amount: Decimal) -> None:
             amount=amount,
         )
 
+
 # ------------------ Views ------------------
 
 @login_required
@@ -356,77 +627,19 @@ def auction_screen(request, slug: str):
     unsold_total = 0
 
     if auction:
-        # Keep auction consistent with team assignments (retained players should never come up for bidding).
-        _withdraw_open_lots_for_assigned_players(auction)
-        _relist_restricted_unsold_if_needed(auction)
-        restricted_lot_no, auction_rules_config = _active_restricted_lot(auction)
-
-        lot_scope = AuctionLot.objects.filter(auction=auction)
-        if restricted_lot_no:
-            lot_scope = lot_scope.filter(lot_no=restricted_lot_no)
-
-        # Prefer an in-progress RUNNING lot (so refresh resumes the same player)
-        current_lot = (
-            lot_scope.filter(status=AuctionLot.Status.RUNNING)
-            .select_related("player", "sold_to_team")
-            .order_by("lot_no", "lot_order", "id")
-            .first()
-        )
-
-        if not current_lot:
-            current_lot = (
-                lot_scope.filter(status=AuctionLot.Status.PENDING)
-                .select_related("player", "sold_to_team")
-                .order_by("lot_no", "lot_order", "id")
-                .first()
-            )
-
-        if not current_lot:
-            current_lot = (
-                lot_scope
-                .select_related("player", "sold_to_team")
-                .order_by("lot_no", "lot_order", "id")
-                .first()
-            )
-
-        if current_lot and current_lot.status in [AuctionLot.Status.PENDING, AuctionLot.Status.RUNNING]:
-            _ensure_lot_start_event(current_lot)
-
-        # Auction is "completed" when no open (PENDING/RUNNING) lots remain.
-        open_exists = AuctionLot.objects.filter(
-            auction=auction,
-            status__in=[AuctionLot.Status.PENDING, AuctionLot.Status.RUNNING],
-        ).exists()
-        auction_completed = not open_exists
-
-        # Fully completed = no open and no UNSOLD remaining (i.e., all players are SOLD/withdrawn).
-        auction_fully_completed = not AuctionLot.objects.filter(
-            auction=auction,
-            status__in=[
-                AuctionLot.Status.PENDING,
-                AuctionLot.Status.RUNNING,
-                AuctionLot.Status.UNSOLD,
-            ],
-        ).exists()
-
-        top_sold = _get_highest_sold_lot(auction)
-        if top_sold:
+        current_lot, auction_rules_config = _current_lot_for_auction(auction)
+        completion = _auction_completion_summary(auction)
+        auction_completed = completion["auction_completed"]
+        auction_fully_completed = completion["auction_fully_completed"]
+        sold_total = completion["sold_total"]
+        unsold_total = completion["unsold_total"]
+        if completion["highest_sold"]:
             highest_sold = {
-                "player": top_sold.player.name,
-                "team": top_sold.sold_to_team.name if top_sold.sold_to_team else "",
-                "price": top_sold.sold_price,
-                "lot_no": top_sold.lot_no,
+                "player": completion["highest_sold"]["player"],
+                "team": completion["highest_sold"]["team"],
+                "price": Decimal(completion["highest_sold"]["price"] or 0),
+                "lot_no": completion["highest_sold"]["lot_no"],
             }
-
-        sold_total = AuctionLot.objects.filter(auction=auction, status=AuctionLot.Status.SOLD).count()
-        unsold_total = AuctionLot.objects.filter(
-            auction=auction,
-            status__in=[
-                AuctionLot.Status.PENDING,
-                AuctionLot.Status.RUNNING,
-                AuctionLot.Status.UNSOLD,
-            ],
-        ).count()
     else:
         auction_rules_config = normalize_auction_rules(None)
 
@@ -626,7 +839,8 @@ def mark_sold(request, lot_id: int):
 
         # purse check (if configured)
         if (team.purse_total or 0) > 0 and (team.purse_remaining or 0) < sold_price:
-            return JsonResponse({"ok": False, "error": f"{team.name} doesn't have purse for ₹{sold_price}."}, status=400)
+            return JsonResponse({"ok": False, "error": f"{team.name} doesn't have purse for ₹{sold_price}."},
+                                status=400)
 
         # Update lot
         lot.status = AuctionLot.Status.SOLD
@@ -1003,6 +1217,7 @@ def undo_last_bid(request, lot_id: int):
         }
     )
 
+
 @login_required
 @require_POST
 @csrf_exempt
@@ -1090,6 +1305,23 @@ def auction_updates_public(request, slug: str):
 
 
 @require_GET
+def auction_stage_public(request, slug: str):
+    tournament = get_object_or_404(Tournament.objects.select_related("auction"), slug=slug)
+    auction = getattr(tournament, "auction", None)
+    snapshot = _public_auction_snapshot(auction) if auction else None
+    return render(
+        request,
+        "auctions/auction_stage.html",
+        {
+            "tournament": tournament,
+            "auction": auction,
+            "snapshot": snapshot,
+            "hide_nav": True,
+        },
+    )
+
+
+@require_GET
 def auction_updates_feed(request, slug: str):
     tournament = get_object_or_404(Tournament.objects.select_related("auction"), slug=slug)
     auction = getattr(tournament, "auction", None)
@@ -1100,30 +1332,35 @@ def auction_updates_feed(request, slug: str):
         after_id = int(request.GET.get("after", 0) or 0)
     except (TypeError, ValueError):
         after_id = 0
+    try:
+        before_id = int(request.GET.get("before", 0) or 0)
+    except (TypeError, ValueError):
+        before_id = 0
 
     base_qs = AuctionEvent.objects.filter(auction=auction).select_related("lot", "player", "team")
 
-    # When first loading the page (after_id=0), return the *latest* 100 events,
-    # but in ascending id order so the client can prepend them to show newest first.
     if after_id > 0:
         events = list(base_qs.filter(id__gt=after_id).order_by("id")[:100])
+    elif before_id > 0:
+        events = list(base_qs.filter(id__lt=before_id).order_by("-id")[:100])
     else:
+        # When first loading the page, return the latest 100 events in ascending order.
+        # The client prepends them so the newest event stays at the top.
         events = list(base_qs.order_by("-id")[:100])
         events.reverse()
 
-    data = []
-    for e in events:
-        data.append(
-            {
-                "id": e.id,
-                "message": e.message,
-                "level": e.level,
-                "event_type": e.event_type,
-                "time": e.created_at.strftime("%H:%M:%S"),
-                "player": e.player.name if e.player_id else "",
-                "team": e.team.name if e.team_id else "",
-                "lot_no": e.lot.lot_no if e.lot_id else None,
-            }
-        )
+    data = [_serialize_auction_event(e) for e in events]
 
-    return JsonResponse({"ok": True, "events": data})
+    has_older = False
+    if data:
+        oldest_loaded_id = min(item["id"] for item in data)
+        has_older = base_qs.filter(id__lt=oldest_loaded_id).exists()
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "events": data,
+            "has_older": has_older,
+            "snapshot": _public_auction_snapshot(auction),
+        }
+    )

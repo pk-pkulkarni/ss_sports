@@ -10,6 +10,7 @@
     <h2 style="font-weight:950;margin:0;">Edit Team</h2>
   </div>
   <div class="d-flex gap-2 flex-wrap">
+    <a class="btn btn-outline-light" href="{% url 'owner_dashboard' slug=tournament.slug team_id=team.id %}">Owner Dashboard</a>
     <a class="btn btn-outline-light" href="{% url 'tournament_detail' slug=tournament.slug %}">Back to Tournament</a>
     <a class="btn btn-accent" href="{% url 'auction_screen' slug=tournament.slug %}">Auction</a>
   </div>
@@ -54,6 +55,34 @@
           </div>
 
           <div class="col-12">
+            <label class="form-label">{{ form.tagline.label }}</label>
+            {{ form.tagline }}
+            {% for e in form.tagline.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="col-12">
+            <div class="muted" style="font-weight:800;">Brand Colors</div>
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">{{ form.primary_color.label }}</label>
+            {{ form.primary_color }}
+            {% for e in form.primary_color.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">{{ form.secondary_color.label }}</label>
+            {{ form.secondary_color }}
+            {% for e in form.secondary_color.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">{{ form.accent_color.label }}</label>
+            {{ form.accent_color }}
+            {% for e in form.accent_color.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="col-12">
             <div class="form-check">
               {{ form.is_active }}
               <label class="form-check-label">Active</label>
@@ -89,6 +118,121 @@
         <div class="divider"></div>
 
         <button type="submit" class="btn btn-accent" name="action" value="save_team">Save Team</button>
+      </form>
+    </div>
+
+    <div class="card-glass p-4 mt-4">
+      <div class="d-flex flex-wrap align-items-end justify-content-between gap-2">
+        <div>
+          <h3 class="mb-1" style="font-weight:950;">Owner Access</h3>
+          <div class="muted">Link existing login accounts to this team portal.</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="table-wrap">
+        <table class="table table-sports table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Linked Player</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for entry in access_entries %}
+              <tr>
+                <td style="font-weight:900;">
+                  {{ entry.user.username }}
+                  {% if entry.is_primary %}<span class="badge-soft badge-yes ms-2">Primary</span>{% endif %}
+                </td>
+                <td class="muted">{{ entry.linked_player.name|default:"—" }}</td>
+                <td class="muted">{{ entry.get_role_display }}</td>
+                <td>
+                  {% if entry.is_active %}
+                    <span class="badge-soft badge-yes">Active</span>
+                  {% else %}
+                    <span class="badge-soft badge-no">Inactive</span>
+                  {% endif %}
+                </td>
+                <td class="text-end">
+                  <div class="d-flex gap-2 justify-content-end flex-wrap">
+                    {% if not entry.is_primary %}
+                      <form method="post" style="margin:0;">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="set_primary_team_access" />
+                        <input type="hidden" name="access_id" value="{{ entry.id }}" />
+                        <button type="submit" class="btn btn-sm btn-outline-light">Make Primary</button>
+                      </form>
+                    {% endif %}
+                    <form method="post" style="margin:0;">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="remove_team_access" />
+                      <input type="hidden" name="access_id" value="{{ entry.id }}" />
+                      <button type="submit" class="btn btn-sm btn-outline-light">Remove</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="5" class="muted">No owner access linked yet.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <form method="post" class="row g-3 mt-3 align-items-end" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_team_access" />
+
+        <div class="col-12">
+          {% if access_form.non_field_errors %}
+            <div class="alert alert-danger mb-0">{{ access_form.non_field_errors }}</div>
+          {% endif %}
+        </div>
+
+        <div class="col-12 col-md-5">
+          <label class="form-label">{{ access_form.user.label }}</label>
+          {{ access_form.user }}
+          {% for e in access_form.user.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="col-12 col-md-4">
+          <label class="form-label">{{ access_form.linked_player.label }}</label>
+          {{ access_form.linked_player }}
+          <div class="muted" style="font-size:.8rem;">Optional. Link the access user to a squad player to lock self-designation changes.</div>
+          {% for e in access_form.linked_player.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="col-12 col-md-3">
+          <label class="form-label">{{ access_form.role.label }}</label>
+          {{ access_form.role }}
+          {% for e in access_form.role.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="col-6 col-md-2">
+          <div class="form-check mt-md-4">
+            {{ access_form.is_primary }}
+            <label class="form-check-label">{{ access_form.is_primary.label }}</label>
+          </div>
+        </div>
+
+        <div class="col-6 col-md-2">
+          <div class="form-check mt-md-4">
+            {{ access_form.is_active }}
+            <label class="form-check-label">{{ access_form.is_active.label }}</label>
+          </div>
+          {% for e in access_form.is_active.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="col-12">
+          <button type="submit" class="btn btn-outline-light">Add Owner Access</button>
+        </div>
       </form>
     </div>
   </div>

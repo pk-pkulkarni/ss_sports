@@ -1,8 +1,9 @@
+from django.contrib.auth import get_user_model
 from datetime import date
 
 from django import forms
 
-from auctions.models import Team, Player
+from auctions.models import Team, Player, TeamAccess
 
 from .models import Tournament
 
@@ -28,6 +29,10 @@ class TeamCreateForm(forms.ModelForm):
             "name",
             "short_name",
             "logo",
+            "tagline",
+            "primary_color",
+            "secondary_color",
+            "accent_color",
             "purse_total",
             "purse_remaining",
             "min_players",
@@ -36,6 +41,9 @@ class TeamCreateForm(forms.ModelForm):
         ]
         widgets = {
             "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "primary_color": forms.TextInput(attrs={"type": "color"}),
+            "secondary_color": forms.TextInput(attrs={"type": "color"}),
+            "accent_color": forms.TextInput(attrs={"type": "color"}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -54,7 +62,6 @@ class TeamCreateForm(forms.ModelForm):
             if isinstance(f.widget, forms.ClearableFileInput):
                 f.widget.attrs.setdefault("class", "form-control")
 
-
     def clean(self):
         cleaned = super().clean()
 
@@ -69,6 +76,37 @@ class TeamCreateForm(forms.ModelForm):
         if purse_remaining is None:
             cleaned["purse_remaining"] = purse_total
 
+        return cleaned
+
+
+class TeamAccessForm(forms.ModelForm):
+    class Meta:
+        model = TeamAccess
+        fields = ["user", "linked_player", "role", "is_primary", "is_active"]
+        widgets = {
+            "is_primary": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        tournament = kwargs.pop("tournament", None)
+        super().__init__(*args, **kwargs)
+        self.fields["user"].queryset = get_user_model().objects.order_by("username")
+        if tournament:
+            self.fields["linked_player"].queryset = Player.objects.filter(tournament=tournament).order_by("name")
+        else:
+            self.fields["linked_player"].queryset = Player.objects.none()
+        self.fields["linked_player"].required = False
+        self.fields["is_active"].initial = True
+
+        for name, f in self.fields.items():
+            if isinstance(f.widget, forms.Select):
+                f.widget.attrs.setdefault("class", "form-select")
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("is_primary") and not cleaned.get("is_active"):
+            self.add_error("is_active", "Primary access must stay active.")
         return cleaned
 
 
@@ -120,14 +158,14 @@ class PlayerForm(forms.ModelForm):
             if name == "is_active":
                 continue
             if isinstance(
-                f.widget,
-                (
-                    forms.TextInput,
-                    forms.NumberInput,
-                    forms.Select,
-                    forms.DateInput,
-                    forms.Textarea,
-                ),
+                    f.widget,
+                    (
+                            forms.TextInput,
+                            forms.NumberInput,
+                            forms.Select,
+                            forms.DateInput,
+                            forms.Textarea,
+                    ),
             ):
                 f.widget.attrs.setdefault("class", "form-control")
             if isinstance(f.widget, forms.ClearableFileInput):

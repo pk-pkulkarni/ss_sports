@@ -43,6 +43,35 @@
             {% for e in form.logo.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
           </div>
 
+          <div class="col-12">
+            <label class="form-label">{{ form.tagline.label }}</label>
+            {{ form.tagline }}
+            <div class="muted" style="font-size:.85rem;">Optional. Short team slogan for owner dashboard and stage screens.</div>
+            {% for e in form.tagline.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="col-12">
+            <div class="muted" style="font-weight:800;">Brand Colors</div>
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">{{ form.primary_color.label }}</label>
+            {{ form.primary_color }}
+            {% for e in form.primary_color.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">{{ form.secondary_color.label }}</label>
+            {{ form.secondary_color }}
+            {% for e in form.secondary_color.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">{{ form.accent_color.label }}</label>
+            {{ form.accent_color }}
+            {% for e in form.accent_color.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+
           <div class="col-12 col-md-6">
             <label class="form-label">{{ form.purse_total.label }}</label>
             {{ form.purse_total }}

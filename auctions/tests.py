@@ -6,7 +6,7 @@ from django.urls import reverse
 
 from tournaments.models import Tournament
 
-from .models import Auction, AuctionLot, Player, Team, TeamPlayer
+from .models import Auction, AuctionEvent, AuctionLot, Player, Team, TeamPlayer
 from .rules import AUCTION_TYPE_RULE_BASED, RULE_LOT1, RULE_LOT1_AND_LOT2, RULE_PRICE_CAPS
 
 
@@ -173,3 +173,67 @@ class AuctionRulesTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("already has a 700000 value player", response.json()["error"])
+
+    def test_updates_feed_can_page_older_events(self):
+        for idx in range(105):
+            AuctionEvent.objects.create(
+                auction=self.auction,
+                event_type=AuctionEvent.EventType.BID,
+                level=AuctionEvent.Level.BID,
+                message=f"Bid event {idx + 1}",
+            )
+
+        first_response = self.client.get(
+            reverse("auction_updates_feed", kwargs={"slug": self.tournament.slug})
+        )
+        self.assertEqual(first_response.status_code, 200)
+        first_data = first_response.json()
+        self.assertEqual(len(first_data["events"]), 100)
+        self.assertTrue(first_data["has_older"])
+
+        oldest_loaded_id = min(event["id"] for event in first_data["events"])
+        older_response = self.client.get(
+            reverse("auction_updates_feed", kwargs={"slug": self.tournament.slug}),
+            {"before": oldest_loaded_id},
+        )
+        self.assertEqual(older_response.status_code, 200)
+        older_data = older_response.json()
+        self.assertEqual(len(older_data["events"]), 5)
+        self.assertFalse(older_data["has_older"])
+        self.assertTrue(all(event["id"] < oldest_loaded_id for event in older_data["events"]))
+
+    def test_updates_feed_includes_stage_snapshot(self):
+        team = self.create_team("Stage XI")
+        live_lot = self.create_lot("Spotlight Player", lot_no=3, base_price="200000")
+        AuctionEvent.objects.create(
+            auction=self.auction,
+            lot=live_lot,
+            player=live_lot.player,
+            team=team,
+            event_type=AuctionEvent.EventType.BID,
+            level=AuctionEvent.Level.BID,
+            message="Stage XI opened the bidding.",
+            amount=Decimal("200000"),
+        )
+
+        response = self.client.get(
+            reverse("auction_updates_feed", kwargs={"slug": self.tournament.slug})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("snapshot", data)
+        self.assertEqual(data["snapshot"]["auction_code"], self.auction.code)
+        self.assertEqual(data["snapshot"]["current_lot"]["player"]["name"], "Spotlight Player")
+        self.assertEqual(data["snapshot"]["leaderboard"][0]["name"], "Stage XI")
+
+    def test_public_stage_page_is_accessible_without_login(self):
+        self.create_lot("Open Stage Player", lot_no=1)
+        self.client.logout()
+
+        response = self.client.get(
+            reverse("auction_stage_public", kwargs={"slug": self.tournament.slug})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Auction Stage")

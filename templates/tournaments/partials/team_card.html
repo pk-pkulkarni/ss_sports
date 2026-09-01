@@ -1,6 +1,14 @@
 {% load inr %}
 
-<div id="team-card-{{ team.id }}" class="card-glass team-card" data-name="{{ team.name|lower }}">
+<div
+  id="team-card-{{ team.id }}"
+  class="card-glass team-card"
+  data-name="{{ team.name|lower }}"
+  style="background:
+    radial-gradient(220px 160px at 12% 10%, {{ team.secondary_color }}33, transparent 65%),
+    radial-gradient(220px 160px at 88% 18%, {{ team.accent_color }}2b, transparent 65%),
+    linear-gradient(160deg, {{ team.primary_color }}f2, rgba(9, 13, 28, .92));"
+>
   <div class="d-flex align-items-center justify-content-between gap-2">
     <div class="d-flex align-items-center gap-3">
       <div class="logo">
@@ -16,6 +24,9 @@
             {{ team.name }}
           </a>
         </div>
+        {% if team.tagline %}
+          <div class="muted" style="font-size:.8rem;">{{ team.tagline }}</div>
+        {% endif %}
         <div class="muted" style="font-size:.9rem;">
           Purse: <span class="price">₹ {{ team.purse_remaining|inr }}</span>
           / ₹ {{ team.purse_total|inr }}
@@ -29,12 +40,17 @@
     {% if team.purse_total and team.purse_total > 0 %}
       {% widthratio team.purse_remaining team.purse_total 100 as pct %}
       <div class="meter" title="{{ pct }}% remaining">
-        <span style="width: {{ pct }}%;"></span>
+        <span style="width: {{ pct }}%; background: linear-gradient(90deg, {{ team.secondary_color }}, {{ team.accent_color }});"></span>
       </div>
       <div class="muted mt-2" style="font-size:.85rem;">{{ pct }}% purse remaining</div>
     {% else %}
       <div class="meter"><span style="width: 0%;"></span></div>
       <div class="muted mt-2" style="font-size:.85rem;">Set purse_total to show meter</div>
     {% endif %}
+  </div>
+
+  <div class="mt-3 d-flex gap-2 flex-wrap">
+    <a class="btn btn-sm btn-outline-light" href="{% url 'owner_dashboard' slug=tournament.slug team_id=team.id %}">Owner View</a>
+    <a class="btn btn-sm btn-outline-light" href="{% url 'team_edit' slug=tournament.slug team_id=team.id %}">Edit Team</a>
   </div>
 </div>
