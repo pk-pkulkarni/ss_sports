@@ -867,7 +867,8 @@
 
                 <!-- RIGHT: Teams Button -->
                 <a class="btn btn-outline-light"
-                   href="/t/{{ tournament.slug }}/teams-dashboard/">
+                   href="{% url 'teams_dashboard' slug=tournament.slug %}?source=auction"
+                   target="_blank" rel="noopener noreferrer">
                    Teams
                 </a>
 

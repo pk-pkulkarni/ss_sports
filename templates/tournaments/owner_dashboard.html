@@ -179,7 +179,7 @@
 
         .strategy-row-grid {
             display: grid;
-            grid-template-columns: .9fr 1.1fr;
+            grid-template-columns: 1fr;
             gap: 18px;
             margin-top: 18px;
             align-items: start;
@@ -538,6 +538,251 @@
             color: rgba(243, 247, 255, .70);
             font-size: .84rem;
         }
+
+        .watchlist-live {
+            border-color: color-mix(in srgb, var(--team-secondary) 74%, #fff);
+            background: linear-gradient(145deg,
+            color-mix(in srgb, var(--team-primary) 82%, #101827),
+            color-mix(in srgb, var(--team-secondary) 22%, rgba(255, 255, 255, .05)));
+            animation: watchlist-pulse 1.6s ease-in-out infinite;
+        }
+
+        @keyframes watchlist-pulse {
+            0%, 100% {
+                box-shadow: 0 18px 50px rgba(0, 0, 0, .26), 0 0 0 0 color-mix(in srgb, var(--team-secondary) 42%, transparent);
+            }
+            50% {
+                box-shadow: 0 18px 50px rgba(0, 0, 0, .26), 0 0 0 9px transparent;
+            }
+        }
+
+        .watchlist-live-alert {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            margin-bottom: 14px;
+            padding: 10px 12px;
+            border-radius: 14px;
+            color: #fff;
+            font-weight: 900;
+            background: color-mix(in srgb, var(--team-secondary) 32%, rgba(5, 12, 24, .78));
+            border: 1px solid color-mix(in srgb, var(--team-secondary) 70%, #fff);
+        }
+
+        .watchlist-live-dot {
+            width: 10px;
+            height: 10px;
+            flex: 0 0 10px;
+            border-radius: 50%;
+            background: var(--team-accent);
+            box-shadow: 0 0 0 5px color-mix(in srgb, var(--team-accent) 22%, transparent);
+        }
+
+        .player-status {
+            display: inline-flex;
+            align-items: center;
+            white-space: nowrap;
+            padding: .3rem .62rem;
+            border: 1px solid transparent;
+            border-radius: 999px;
+            font-size: .76rem;
+            font-weight: 900;
+        }
+
+        .player-status.sold {
+            color: #ffdada;
+            border-color: rgba(248, 113, 113, .38);
+            background: rgba(248, 113, 113, .15);
+        }
+
+        .player-status.unsold {
+            color: #fff0bd;
+            border-color: rgba(251, 191, 36, .38);
+            background: rgba(251, 191, 36, .14);
+        }
+
+        .player-status.retained {
+            color: #d8ecff;
+            border-color: rgba(96, 165, 250, .4);
+            background: rgba(59, 130, 246, .15);
+        }
+
+        .player-status.remaining {
+            color: #d8ffeb;
+            border-color: rgba(52, 211, 153, .4);
+            background: rgba(16, 185, 129, .15);
+        }
+
+        .player-browser {
+            width: min(1180px, 94vw);
+            height: min(720px, 88vh);
+            max-width: none;
+            max-height: none;
+            padding: 0;
+            overflow: hidden;
+            resize: both;
+            color: rgba(243, 247, 255, .96);
+            border: 1px solid rgba(255, 255, 255, .22);
+            border-radius: 22px;
+            background: #0b1424;
+            box-shadow: 0 28px 100px rgba(0, 0, 0, .72);
+        }
+
+        .player-browser::backdrop {
+            background: rgba(1, 5, 14, .72);
+            backdrop-filter: blur(5px);
+        }
+
+        .player-browser-shell {
+            height: 100%;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .player-browser-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 15px 18px;
+            cursor: move;
+            user-select: none;
+            border-bottom: 1px solid rgba(255, 255, 255, .12);
+            background: linear-gradient(90deg,
+            color-mix(in srgb, var(--team-primary) 86%, #07101d),
+            color-mix(in srgb, var(--team-secondary) 22%, #07101d));
+        }
+
+        .player-browser-header h3 {
+            margin: 0;
+            font-weight: 900;
+        }
+
+        .player-browser-close {
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, .18);
+            background: rgba(255, 255, 255, .08);
+            color: #fff;
+            font-size: 1.25rem;
+            line-height: 1;
+        }
+
+        .player-browser-toolbar {
+            display: grid;
+            grid-template-columns: minmax(240px, 1fr) 210px auto;
+            gap: 10px;
+            padding: 14px 18px;
+            border-bottom: 1px solid rgba(255, 255, 255, .10);
+        }
+
+        .player-browser-toolbar .row-control {
+            width: 100%;
+        }
+
+        .catalog-count {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            color: rgba(243, 247, 255, .7);
+            font-size: .84rem;
+            font-weight: 800;
+        }
+
+        .catalog-table-wrap {
+            min-height: 0;
+            flex: 1;
+            overflow: auto;
+        }
+
+        .catalog-table {
+            width: 100%;
+            min-width: 760px;
+            border-collapse: collapse;
+        }
+
+        .catalog-table th,
+        .catalog-table td {
+            padding: 11px 13px;
+            text-align: left;
+            vertical-align: middle;
+            border-bottom: 1px solid rgba(255, 255, 255, .08);
+        }
+
+        .catalog-table th {
+            position: sticky;
+            z-index: 2;
+            top: 0;
+            color: rgba(243, 247, 255, .72);
+            background: #111c2e;
+            font-size: .74rem;
+            text-transform: uppercase;
+            letter-spacing: .07em;
+        }
+
+        .catalog-table td {
+            font-size: .88rem;
+        }
+
+        .catalog-player-name {
+            font-weight: 900;
+        }
+
+        .catalog-stats {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            max-width: 360px;
+        }
+
+        .catalog-stat {
+            padding: .2rem .45rem;
+            border-radius: 8px;
+            color: rgba(243, 247, 255, .82);
+            background: rgba(255, 255, 255, .07);
+            font-size: .76rem;
+        }
+
+        .catalog-action-form {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin: 0;
+        }
+
+        .catalog-action-form .row-control {
+            min-width: 88px;
+            width: 88px;
+        }
+
+        .catalog-empty {
+            display: none;
+            padding: 24px 18px;
+            text-align: center;
+            color: rgba(243, 247, 255, .7);
+        }
+
+        @media (max-width: 700px) {
+            .player-browser {
+                width: 96vw;
+                height: 90vh;
+                resize: none;
+            }
+
+            .player-browser-header {
+                cursor: default;
+            }
+
+            .player-browser-toolbar {
+                grid-template-columns: 1fr;
+            }
+
+            .catalog-count {
+                justify-content: flex-start;
+            }
+        }
     </style>
 {% endblock %}
 
@@ -589,7 +834,8 @@
                     <a class="owner-btn" href="{% url 'auction_screen' slug=tournament.slug %}">Organizer Auction
                         Screen</a>
                 {% endif %}
-                <a class="owner-btn" href="{% url 'tournament_list' %}">All Dashboards</a>
+                <a class="owner-btn" href="{% url 'teams_dashboard' slug=tournament.slug %}?source=owner"
+                   target="_blank" rel="noopener noreferrer">All Teams</a>
             </div>
 
             <div class="stats-grid">
@@ -632,7 +878,7 @@
         </div>
 
         <div class="owner-row-grid">
-            <div class="owner-panel">
+            <div class="owner-panel{% if current_lot_payload.is_watchlist_live %} watchlist-live{% endif %}">
                 <div class="panel-pad">
                     <div class="section-title">
                         <h3>Current Lot</h3>
@@ -640,6 +886,15 @@
                     </div>
 
                     {% if current_lot_payload %}
+                        {% if current_lot_payload.is_watchlist_live %}
+                            <div class="watchlist-live-alert" role="alert">
+                                <span class="watchlist-live-dot"></span>
+                                Watchlist target is live
+                                {% if current_lot_payload.watchlist_entry.note %}
+                                    &mdash; {{ current_lot_payload.watchlist_entry.note }}
+                                {% endif %}
+                            </div>
+                        {% endif %}
                         <div class="section-note">Appearance {{ current_lot_payload.appearance_no }} •
                             Lot {{ current_lot_payload.lot.lot_no }}.{{ current_lot_payload.lot.lot_order }}</div>
                         <p class="player-name">{{ current_lot_payload.lot.player.name }}</p>
@@ -846,6 +1101,7 @@
             </div>
             {% endcomment %}
 
+            {% comment %}
             <div class="owner-panel">
                 <div class="panel-pad">
                     <div class="section-title">
@@ -888,6 +1144,7 @@
                     </div>
                 </div>
             </div>
+            {% endcomment %}
 
             <div class="owner-panel">
                 <div class="panel-pad">
@@ -899,48 +1156,23 @@
                         <span class="owner-chip">{{ watchlist_entries|length }}</span>
                     </div>
 
-                    {% if can_edit_strategy %}
-                        <form method="post" class="watchlist-form mb-3">
-                            {% csrf_token %}
-                            <input type="hidden" name="action" value="add_watchlist">
-                            <div class="field-grid">
-                                <select class="row-control" name="player_id" required>
-                                    <option value="">Select available player</option>
-                                    {% for player in watchlist_candidates %}
-                                        <option value="{{ player.id }}">
-                                            {{ player.name }} - {{ player.get_role_display|default:"Role TBD" }} -
-                                            &#8377; {{ player.base_price|inr }}
-                                            {% if player.auction_lot %}
-                                                - Lot {{ player.auction_lot.lot_no }}.{{ player.auction_lot.lot_order }}
-                                            {% endif %}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                                <select class="row-control" name="priority">
-                                    {% for value, label in watchlist_priority_choices %}
-                                        <option value="{{ value }}">{{ label }}</option>
-                                    {% endfor %}
-                                </select>
-                                <input class="row-control watchlist-note" name="note" maxlength="180"
-                                       placeholder="Optional note: max price, backup plan, role fit">
-                            </div>
-                            <button type="submit" class="row-btn primary mt-2">Add To Watchlist</button>
-                        </form>
-                    {% endif %}
+                    <button type="button" class="row-btn primary mb-3" id="openPlayerBrowser">
+                        Browse All Players
+                    </button>
 
                     <div class="player-card-list">
                         {% for entry in watchlist_entries %}
                             <div class="strategy-item">
                                 <div class="strategy-head">
                                     <span>{{ entry.player.name }}</span>
-                                    <span class="mini-badge">{{ entry.get_priority_display }}</span>
+                                    <span class="d-flex flex-wrap gap-1 justify-content-end">
+                                        <span class="player-status {{ entry.player_status_class }}">{{ entry.player_status }}</span>
+                                        <span class="mini-badge">{{ entry.get_priority_display }}</span>
+                                    </span>
                                 </div>
                                 <div class="strategy-meta">
                                     {{ entry.player.get_role_display|default:"Role TBD" }} -
                                     Base &#8377; {{ entry.player.base_price|inr }}
-                                    {% if entry.auction_lot %}
-                                        - Lot {{ entry.auction_lot.lot_no }}.{{ entry.auction_lot.lot_order }}
-                                    {% endif %}
                                 </div>
                                 {% if entry.note %}
                                     <div class="strategy-meta">{{ entry.note }}</div>
@@ -1000,6 +1232,7 @@
             </div>
             {% endcomment %}
 
+            {% comment %}
             <div class="owner-panel">
                 <div class="panel-pad">
                     <div class="section-title">
@@ -1031,6 +1264,7 @@
                     </div>
                 </div>
             </div>
+            {% endcomment %}
         </div>
 
         <div class="owner-row-grid secondary">
@@ -1095,6 +1329,89 @@
                 </div>
             </div>
         </div>
+
+        <dialog class="player-browser" id="playerBrowser" aria-labelledby="playerBrowserTitle">
+            <div class="player-browser-shell">
+                <div class="player-browser-header" id="playerBrowserDragHandle">
+                    <div>
+                        <h3 id="playerBrowserTitle">All Players</h3>
+                        <div class="section-note">Search names, inspect status and stats, then add eligible players to this team's watchlist.</div>
+                    </div>
+                    <button type="button" class="player-browser-close" id="closePlayerBrowser" aria-label="Close player list">&times;</button>
+                </div>
+
+                <div class="player-browser-toolbar">
+                    <input type="search" class="row-control" id="playerCatalogSearch"
+                           placeholder="Search by first name or surname" autocomplete="off">
+                    <select class="row-control" id="playerCatalogStatus" aria-label="Filter players by status">
+                        <option value="">All statuses</option>
+                        <option value="sold">Sold</option>
+                        <option value="unsold">Unsold</option>
+                        <option value="retained">Retained</option>
+                        <option value="remaining">Remain to Auction</option>
+                    </select>
+                    <div class="catalog-count" id="playerCatalogCount">{{ player_catalog|length }} players</div>
+                </div>
+
+                <div class="catalog-table-wrap">
+                    <table class="catalog-table">
+                        <thead>
+                        <tr>
+                            <th>Player</th>
+                            <th>Status</th>
+                            <th>Stats</th>
+                            <th>Watchlist</th>
+                        </tr>
+                        </thead>
+                        <tbody id="playerCatalogBody">
+                        {% for item in player_catalog %}
+                            <tr data-player-row data-search="{{ item.player.name|lower }}"
+                                data-status="{{ item.status_class }}">
+                                <td>
+                                    <div class="catalog-player-name">{{ item.player.name }}</div>
+                                    {% if item.assignment %}
+                                        <div class="player-sub">{{ item.assignment.team.name }}</div>
+                                    {% endif %}
+                                </td>
+                                <td><span class="player-status {{ item.status_class }}">{{ item.status }}</span></td>
+                                <td>
+                                    <div class="catalog-stats">
+                                        {% for stat in item.stats %}
+                                            <span class="catalog-stat"><strong>{{ stat.label }}:</strong> {{ stat.value }}</span>
+                                        {% empty %}
+                                            <span class="player-sub">No stats</span>
+                                        {% endfor %}
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if item.is_watched %}
+                                        <button type="button" class="row-btn" disabled>Watching</button>
+                                    {% elif item.can_add_to_watchlist and can_edit_strategy %}
+                                        <form method="post" class="catalog-action-form">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="add_watchlist">
+                                            <input type="hidden" name="player_id" value="{{ item.player.id }}">
+                                            <select class="row-control" name="priority" aria-label="Priority for {{ item.player.name }}">
+                                                {% for value, label in watchlist_priority_choices %}
+                                                    <option value="{{ value }}">{{ label }}</option>
+                                                {% endfor %}
+                                            </select>
+                                            <button type="submit" class="row-btn primary">Add</button>
+                                        </form>
+                                    {% elif item.can_add_to_watchlist %}
+                                        <span class="player-sub">View only</span>
+                                    {% else %}
+                                        <span class="player-sub">Not eligible</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                    <div class="catalog-empty" id="playerCatalogEmpty">No players match this search.</div>
+                </div>
+            </div>
+        </dialog>
     </div>
 {% endblock %}
 
@@ -1103,7 +1420,90 @@
         (function () {
             const statusEl = document.getElementById("ownerRefreshStatus");
             const controls = Array.from(document.querySelectorAll(".squad-edit-control"));
+            const playerBrowser = document.getElementById("playerBrowser");
+            const openPlayerBrowser = document.getElementById("openPlayerBrowser");
+            const closePlayerBrowser = document.getElementById("closePlayerBrowser");
+            const playerSearch = document.getElementById("playerCatalogSearch");
+            const playerStatus = document.getElementById("playerCatalogStatus");
+            const playerRows = Array.from(document.querySelectorAll("[data-player-row]"));
+            const playerCount = document.getElementById("playerCatalogCount");
+            const playerEmpty = document.getElementById("playerCatalogEmpty");
+            const dragHandle = document.getElementById("playerBrowserDragHandle");
             let dirty = false;
+
+            const filterPlayers = () => {
+                const query = (playerSearch?.value || "").trim().toLocaleLowerCase();
+                const status = playerStatus?.value || "";
+                let visible = 0;
+
+                playerRows.forEach((row) => {
+                    const nameMatches = !query || row.dataset.search.includes(query);
+                    const statusMatches = !status || row.dataset.status === status;
+                    row.hidden = !(nameMatches && statusMatches);
+                    if (!row.hidden) visible += 1;
+                });
+
+                if (playerCount) playerCount.textContent = `${visible} player${visible === 1 ? "" : "s"}`;
+                if (playerEmpty) playerEmpty.style.display = visible ? "none" : "block";
+            };
+
+            openPlayerBrowser?.addEventListener("click", () => {
+                if (typeof playerBrowser.showModal === "function") {
+                    playerBrowser.showModal();
+                } else {
+                    playerBrowser.setAttribute("open", "");
+                }
+                filterPlayers();
+                window.setTimeout(() => playerSearch?.focus(), 0);
+            });
+
+            closePlayerBrowser?.addEventListener("click", () => playerBrowser.close());
+            playerSearch?.addEventListener("input", filterPlayers);
+            playerStatus?.addEventListener("change", filterPlayers);
+
+            playerBrowser?.addEventListener("click", (event) => {
+                if (event.target !== playerBrowser) return;
+                const rect = playerBrowser.getBoundingClientRect();
+                const outside = event.clientX < rect.left || event.clientX > rect.right ||
+                    event.clientY < rect.top || event.clientY > rect.bottom;
+                if (outside) playerBrowser.close();
+            });
+
+            let dragState = null;
+            dragHandle?.addEventListener("pointerdown", (event) => {
+                if (event.button !== 0 || event.target.closest("button") || window.innerWidth <= 700) return;
+                const rect = playerBrowser.getBoundingClientRect();
+                playerBrowser.style.width = `${rect.width}px`;
+                playerBrowser.style.height = `${rect.height}px`;
+                playerBrowser.style.margin = "0";
+                playerBrowser.style.left = `${rect.left}px`;
+                playerBrowser.style.top = `${rect.top}px`;
+                dragState = {
+                    offsetX: event.clientX - rect.left,
+                    offsetY: event.clientY - rect.top,
+                };
+                dragHandle.setPointerCapture(event.pointerId);
+            });
+
+            dragHandle?.addEventListener("pointermove", (event) => {
+                if (!dragState) return;
+                const maxLeft = Math.max(0, window.innerWidth - playerBrowser.offsetWidth);
+                const maxTop = Math.max(0, window.innerHeight - playerBrowser.offsetHeight);
+                const left = Math.min(maxLeft, Math.max(0, event.clientX - dragState.offsetX));
+                const top = Math.min(maxTop, Math.max(0, event.clientY - dragState.offsetY));
+                playerBrowser.style.left = `${left}px`;
+                playerBrowser.style.top = `${top}px`;
+            });
+
+            const stopDragging = (event) => {
+                if (!dragState) return;
+                dragState = null;
+                if (dragHandle.hasPointerCapture(event.pointerId)) {
+                    dragHandle.releasePointerCapture(event.pointerId);
+                }
+            };
+            dragHandle?.addEventListener("pointerup", stopDragging);
+            dragHandle?.addEventListener("pointercancel", stopDragging);
 
             controls.forEach((el) => {
                 el.addEventListener("change", () => {
@@ -1122,7 +1522,7 @@
             window.setInterval(() => {
                 const activeTag = document.activeElement ? document.activeElement.tagName : "";
                 const editing = ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(activeTag);
-                if (document.visibilityState !== "visible" || dirty || editing) {
+                if (document.visibilityState !== "visible" || dirty || editing || playerBrowser?.open) {
                     return;
                 }
                 window.location.reload();

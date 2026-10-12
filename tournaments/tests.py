@@ -3,7 +3,17 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
-from auctions.models import Auction, AuctionLot, Bid, Player, Team, TeamAccess, TeamPlayer, TeamWatchlist
+from auctions.models import (
+    Auction,
+    AuctionEvent,
+    AuctionLot,
+    Bid,
+    Player,
+    Team,
+    TeamAccess,
+    TeamPlayer,
+    TeamWatchlist,
+)
 
 from .forms import DEFAULT_PLAYER_BASE_PRICE, PlayerForm, PublicPlayerRegistrationForm
 from .models import Tournament
@@ -171,6 +181,7 @@ class TeamOwnerDashboardTests(TestCase):
 
         self.owner_player = owner_player
         self.bought_player = bought_player
+        self.current_player = current_player
         self.running_lot = running_lot
 
     def test_owner_can_view_owner_dashboard(self):
@@ -185,8 +196,15 @@ class TeamOwnerDashboardTests(TestCase):
         self.assertContains(response, "Captain Cool")
         self.assertContains(response, "Live Prospect")
         self.assertContains(response, "Can Bid")
+        self.assertContains(response, "Browse All Players")
+        self.assertContains(response, "All Players")
+        self.assertContains(response, "All Teams")
+        self.assertContains(
+            response,
+            f'{reverse("teams_dashboard", kwargs={"slug": self.tournament.slug})}?source=owner',
+        )
 
-    def test_owner_dashboard_shows_phase3_strategy_panels(self):
+    def test_owner_dashboard_hides_deferred_strategy_panels(self):
         self.client.force_login(self.owner)
         Bid.objects.create(
             lot=self.running_lot,
@@ -200,13 +218,111 @@ class TeamOwnerDashboardTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Spending Plan")
         self.assertContains(response, "Watchlist")
-        self.assertContains(response, "Demand Watch")
+        self.assertNotContains(response, "Spending Plan")
+        self.assertNotContains(response, "Demand Watch")
         self.assertNotContains(response, "Role Gaps")
         self.assertNotContains(response, "Bargain Candidates")
         self.assertNotContains(response, "Stage Mode")
         self.assertNotContains(response, "Edit Team")
+
+    def test_owner_player_catalog_shows_statuses_and_stats_without_photos(self):
+        unsold_player = Player.objects.create(
+            tournament=self.tournament,
+            name="Unsold Searchable Surname",
+            role=Player.Role.BOWL,
+            base_price=60000,
+            stats={"matches": 8, "wickets": 12},
+            is_active=True,
+        )
+        AuctionLot.objects.create(
+            auction=self.auction,
+            player=unsold_player,
+            lot_no=2,
+            lot_order=1,
+            status=AuctionLot.Status.UNSOLD,
+            base_price_snapshot=60000,
+        )
+        self.current_player.stats = {"matches": 10, "runs": 245}
+        self.current_player.save(update_fields=["stats"])
+        self.client.force_login(self.owner)
+
+        response = self.client.get(
+            reverse("owner_dashboard", kwargs={"slug": self.tournament.slug, "team_id": self.team.id})
+        )
+
+        self.assertContains(response, "Sold")
+        self.assertContains(response, "Retained")
+        self.assertContains(response, "Unsold")
+        self.assertContains(response, "Remain to Auction")
+        self.assertContains(response, "Unsold Searchable Surname")
+        self.assertContains(response, "Matches:")
+        self.assertContains(response, "Wickets:")
+        self.assertNotContains(response, "<th>Role</th>", html=True)
+        self.assertNotContains(response, "<th>Base Price</th>", html=True)
+        self.assertNotContains(response, "<th>Lot</th>", html=True)
+        self.assertNotContains(response, "player.photo")
+
+    def test_running_watchlist_player_highlights_current_lot(self):
+        TeamWatchlist.objects.create(
+            team=self.team,
+            player=self.current_player,
+            added_by=self.owner,
+            priority=TeamWatchlist.Priority.HIGH,
+            note="Push up to 3 lakh",
+        )
+        self.client.force_login(self.owner)
+
+        response = self.client.get(
+            reverse("owner_dashboard", kwargs={"slug": self.tournament.slug, "team_id": self.team.id})
+        )
+
+        self.assertContains(response, "Watchlist target is live")
+        self.assertContains(response, "Push up to 3 lakh")
+        self.assertContains(response, "watchlist-live")
+
+    def test_started_pending_watchlist_player_highlights_current_lot(self):
+        self.running_lot.status = AuctionLot.Status.PENDING
+        self.running_lot.save(update_fields=["status"])
+        AuctionEvent.objects.create(
+            auction=self.auction,
+            lot=self.running_lot,
+            player=self.current_player,
+            event_type=AuctionEvent.EventType.LOT_START,
+            level=AuctionEvent.Level.INFO,
+            message="Live Prospect is up for auction.",
+        )
+        TeamWatchlist.objects.create(
+            team=self.team,
+            player=self.current_player,
+            added_by=self.owner,
+            priority=TeamWatchlist.Priority.HIGH,
+        )
+        self.client.force_login(self.owner)
+
+        response = self.client.get(
+            reverse("owner_dashboard", kwargs={"slug": self.tournament.slug, "team_id": self.team.id})
+        )
+
+        self.assertContains(response, "Watchlist target is live")
+        self.assertContains(response, "watchlist-live")
+
+    def test_unstarted_pending_watchlist_player_does_not_highlight(self):
+        self.running_lot.status = AuctionLot.Status.PENDING
+        self.running_lot.save(update_fields=["status"])
+        TeamWatchlist.objects.create(
+            team=self.team,
+            player=self.current_player,
+            added_by=self.owner,
+            priority=TeamWatchlist.Priority.HIGH,
+        )
+        self.client.force_login(self.owner)
+
+        response = self.client.get(
+            reverse("owner_dashboard", kwargs={"slug": self.tournament.slug, "team_id": self.team.id})
+        )
+
+        self.assertNotContains(response, "Watchlist target is live")
 
     def test_owner_can_add_and_remove_watchlist_player(self):
         self.client.force_login(self.owner)
@@ -249,6 +365,82 @@ class TeamOwnerDashboardTests(TestCase):
             reverse("owner_dashboard", kwargs={"slug": self.tournament.slug, "team_id": self.team.id}),
         )
         self.assertFalse(TeamWatchlist.objects.filter(team=self.team, player=target).exists())
+
+    def test_owner_cannot_add_sold_player_to_watchlist(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse("owner_dashboard", kwargs={"slug": self.tournament.slug, "team_id": self.team.id}),
+            data={
+                "action": "add_watchlist",
+                "player_id": self.bought_player.id,
+                "priority": TeamWatchlist.Priority.HIGH,
+            },
+            follow=True,
+        )
+
+        self.assertContains(response, "Sold or retained players cannot be added")
+        self.assertFalse(
+            TeamWatchlist.objects.filter(team=self.team, player=self.bought_player).exists()
+        )
+
+    def test_team_owner_can_open_all_teams_dashboard(self):
+        self.client.force_login(self.owner)
+        teams_url = reverse("teams_dashboard", kwargs={"slug": self.tournament.slug})
+
+        response = self.client.get(f"{teams_url}?source=owner")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Sky Strikers")
+        self.assertNotContains(
+            response,
+            reverse("auction_screen", kwargs={"slug": self.tournament.slug}),
+        )
+        self.assertNotContains(
+            response,
+            f'href="{reverse("tournament_detail", kwargs={"slug": self.tournament.slug})}"',
+        )
+        self.assertNotContains(
+            response,
+            reverse("teams_export_xlsx", kwargs={"slug": self.tournament.slug}),
+        )
+
+    def test_auction_source_all_teams_shows_only_export(self):
+        self.client.force_login(self.organizer)
+        teams_url = reverse("teams_dashboard", kwargs={"slug": self.tournament.slug})
+
+        response = self.client.get(f"{teams_url}?source=auction")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Export Teams")
+        self.assertNotContains(response, "Back to Auction")
+        self.assertNotContains(
+            response,
+            f'href="{reverse("tournament_detail", kwargs={"slug": self.tournament.slug})}"',
+        )
+
+    def test_outsider_cannot_open_all_teams_dashboard(self):
+        self.client.force_login(self.outsider)
+
+        response = self.client.get(
+            reverse("teams_dashboard", kwargs={"slug": self.tournament.slug})
+        )
+
+        self.assertRedirects(response, reverse("tournament_list"))
+
+    def test_auction_teams_link_opens_in_new_tab(self):
+        self.client.force_login(self.organizer)
+
+        response = self.client.get(
+            reverse("auction_screen", kwargs={"slug": self.tournament.slug})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            f'href="{reverse("teams_dashboard", kwargs={"slug": self.tournament.slug})}?source=auction"',
+        )
+        self.assertContains(response, 'target="_blank"')
 
     def test_tournament_list_redirects_single_owner_to_dashboard(self):
         self.client.force_login(self.owner)

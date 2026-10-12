@@ -108,11 +108,17 @@
     <div class="muted" style="font-weight:800;">{{ tournament.name }}</div>
     <h2 style="font-weight:950;margin:0;">Teams Dashboard</h2>
   </div>
-  <div class="d-flex gap-2">
-    <a class="btn btn-outline-light" href="/t/{{ tournament.slug }}/auction/">Back to Auction</a>
-    <a class="btn btn-outline-light" href="/t/{{ tournament.slug }}/">Tournament</a>
-    <a class="btn btn-accent" href="/t/{{ tournament.slug }}/teams-export/">Export Teams</a>
-  </div>
+  {% if show_teams_dashboard_navigation or show_teams_dashboard_export %}
+    <div class="d-flex gap-2">
+      {% if show_teams_dashboard_navigation %}
+        <a class="btn btn-outline-light" href="{% url 'auction_screen' slug=tournament.slug %}">Back to Auction</a>
+        <a class="btn btn-outline-light" href="{% url 'tournament_detail' slug=tournament.slug %}">Tournament</a>
+      {% endif %}
+      {% if show_teams_dashboard_export %}
+        <a class="btn btn-accent" href="{% url 'teams_export_xlsx' slug=tournament.slug %}">Export Teams</a>
+      {% endif %}
+    </div>
+  {% endif %}
 </div>
 
 <div class="grid2">

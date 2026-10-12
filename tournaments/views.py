@@ -13,7 +13,17 @@ from django.views.decorators.http import require_POST
 
 from decimal import Decimal, InvalidOperation
 
-from auctions.models import Auction, Team, TeamAccess, TeamWatchlist, TeamPlayer, Player, AuctionLot, Bid
+from auctions.models import (
+    Auction,
+    AuctionEvent,
+    AuctionLot,
+    Bid,
+    Player,
+    Team,
+    TeamAccess,
+    TeamPlayer,
+    TeamWatchlist,
+)
 from auctions.rules import (
     AUCTION_TYPE_OPEN,
     AUCTION_TYPE_RULE_BASED,
@@ -453,6 +463,74 @@ def _player_lot_map(auction: Auction | None) -> dict[int, AuctionLot]:
     }
 
 
+def _display_player_stats(stats) -> list[dict[str, str]]:
+    if not isinstance(stats, dict):
+        return []
+
+    display_stats = []
+    for key, value in stats.items():
+        if value in (None, ""):
+            continue
+        if isinstance(value, (dict, list)):
+            value = json.dumps(value, ensure_ascii=False)
+        display_stats.append(
+            {
+                "label": str(key).replace("_", " ").strip().title(),
+                "value": str(value),
+            }
+        )
+    return display_stats
+
+
+def _owner_player_catalog(
+    tournament: Tournament,
+    lot_by_player_id: dict[int, AuctionLot],
+    watched_player_ids: set[int],
+) -> list[dict]:
+    assignments = {
+        entry.player_id: entry
+        for entry in TeamPlayer.objects.filter(tournament=tournament)
+        .exclude(status=TeamPlayer.Status.RELEASED)
+        .select_related("team")
+    }
+
+    catalog = []
+    for player in Player.objects.filter(tournament=tournament, is_active=True).order_by("name"):
+        assignment = assignments.get(player.id)
+        lot = lot_by_player_id.get(player.id)
+
+        if assignment and assignment.bought_in_auction_id:
+            status = "Sold"
+            status_class = "sold"
+        elif assignment:
+            status = "Retained"
+            status_class = "retained"
+        elif lot and lot.status == AuctionLot.Status.SOLD:
+            status = "Sold"
+            status_class = "sold"
+        elif lot and lot.status == AuctionLot.Status.UNSOLD:
+            status = "Unsold"
+            status_class = "unsold"
+        else:
+            status = "Remain to Auction"
+            status_class = "remaining"
+
+        is_watched = player.id in watched_player_ids
+        catalog.append(
+            {
+                "player": player,
+                "assignment": assignment,
+                "status": status,
+                "status_class": status_class,
+                "stats": _display_player_stats(player.stats),
+                "is_watched": is_watched,
+                "can_add_to_watchlist": status_class not in {"sold", "retained"} and not is_watched,
+            }
+        )
+
+    return catalog
+
+
 def _build_owner_dashboard_context(user, team: Team) -> dict:
     tournament = team.tournament
     auction = getattr(tournament, "auction", None)
@@ -564,12 +642,32 @@ def _build_owner_dashboard_context(user, team: Team) -> dict:
         .order_by("priority", "player__base_price", "player__name")
     )
     watched_player_ids = {entry.player_id for entry in watchlist_entries}
-    watchlist_candidates = list(
-        Player.objects.filter(tournament=tournament, is_active=True)
-        .exclude(id__in=active_assignment_ids)
-        .exclude(id__in=watched_player_ids)
-        .order_by("base_price", "name")[:40]
+    player_catalog = _owner_player_catalog(
+        tournament,
+        lot_by_player_id,
+        watched_player_ids,
     )
+    catalog_by_player_id = {item["player"].id: item for item in player_catalog}
+
+    current_watchlist_entry = None
+    current_lot_has_started = False
+    if current_lot:
+        current_lot_has_started = current_lot.status == AuctionLot.Status.RUNNING
+        if current_lot.status == AuctionLot.Status.PENDING:
+            current_lot_has_started = AuctionEvent.objects.filter(
+                auction=auction,
+                lot=current_lot,
+                event_type=AuctionEvent.EventType.LOT_START,
+            ).exists()
+
+    if current_lot_has_started:
+        current_watchlist_entry = next(
+            (entry for entry in watchlist_entries if entry.player_id == current_lot.player_id),
+            None,
+        )
+    if current_lot_payload:
+        current_lot_payload["watchlist_entry"] = current_watchlist_entry
+        current_lot_payload["is_watchlist_live"] = current_watchlist_entry is not None
 
     role_gap_indicators = _role_gap_indicators(squad)
 
@@ -612,24 +710,11 @@ def _build_owner_dashboard_context(user, team: Team) -> dict:
         )
         .order_by("base_price", "-bid_count", "name")[:6]
     )
-    demand_players = list(
-        Player.objects.filter(tournament=tournament, is_active=True)
-        .exclude(id__in=active_assignment_ids)
-        .annotate(
-            bid_count=Count("lots__bids", filter=Q(lots__bids__is_valid=True)),
-            highest_market_bid=Max("lots__bids__amount", filter=Q(lots__bids__is_valid=True)),
-        )
-        .filter(bid_count__gt=0)
-        .order_by("-bid_count", "-highest_market_bid", "name")[:6]
-    )
-
-    for player in watchlist_entries:
-        player.auction_lot = lot_by_player_id.get(player.player_id)
-    for player in watchlist_candidates:
-        player.auction_lot = lot_by_player_id.get(player.id)
+    for entry in watchlist_entries:
+        catalog_item = catalog_by_player_id.get(entry.player_id)
+        entry.player_status = catalog_item["status"] if catalog_item else "Unavailable"
+        entry.player_status_class = catalog_item["status_class"] if catalog_item else "sold"
     for player in bargain_candidates:
-        player.auction_lot = lot_by_player_id.get(player.id)
-    for player in demand_players:
         player.auction_lot = lot_by_player_id.get(player.id)
 
     return {
@@ -657,11 +742,10 @@ def _build_owner_dashboard_context(user, team: Team) -> dict:
         "designation_choices": TeamPlayer.Designation.choices,
         "watchlist_priority_choices": TeamWatchlist.Priority.choices,
         "watchlist_entries": watchlist_entries,
-        "watchlist_candidates": watchlist_candidates,
+        "player_catalog": player_catalog,
         "role_gap_indicators": role_gap_indicators,
         "spending_insights": spending_insights,
         "bargain_candidates": bargain_candidates,
-        "demand_players": demand_players,
         "owner_access": owner_access,
     }
 
@@ -1457,8 +1541,13 @@ def owner_dashboard(request, slug: str, team_id: int):
             tournament=tournament,
             player=player,
         ).exclude(status=TeamPlayer.Status.RELEASED).exists()
-        if already_assigned:
-            messages.error(request, "This player is already assigned to a team.")
+        already_sold = AuctionLot.objects.filter(
+            auction__tournament=tournament,
+            player=player,
+            status=AuctionLot.Status.SOLD,
+        ).exists()
+        if already_assigned or already_sold:
+            messages.error(request, "Sold or retained players cannot be added to a watchlist.")
             return redirect("owner_dashboard", slug=tournament.slug, team_id=team.id)
 
         priority = (request.POST.get("priority") or TeamWatchlist.Priority.MEDIUM).strip()
@@ -1543,7 +1632,14 @@ def owner_dashboard(request, slug: str, team_id: int):
 
 @login_required
 def teams_dashboard(request, slug: str):
-    tournament = get_object_or_404(_filter_tournament_qs(Tournament, request.user), slug=slug)
+    tournament = get_object_or_404(Tournament, slug=slug)
+    can_manage = can_manage_tournament(request.user, tournament)
+    can_view_all_teams = can_manage or user_team_access_qs(
+        request.user
+    ).filter(team__tournament=tournament).exists()
+    if not can_view_all_teams:
+        messages.error(request, "Forbidden.")
+        return redirect("tournament_list")
 
     teams = (
         Team.objects.filter(tournament=tournament, is_active=True)
@@ -1553,6 +1649,7 @@ def teams_dashboard(request, slug: str):
     # Load squad for each team (sold players)
     team_players = (
         TeamPlayer.objects.filter(tournament=tournament)
+        .exclude(status=TeamPlayer.Status.RELEASED)
         .select_related("team", "player")
         .order_by("team__name", "player__name")
     )
@@ -1566,6 +1663,7 @@ def teams_dashboard(request, slug: str):
     # (purse_total - purse_remaining is also fine, but sum is more trustworthy)
     spent_by_team = (
         TeamPlayer.objects.filter(tournament=tournament)
+        .exclude(status=TeamPlayer.Status.RELEASED)
         .values("team_id")
         .annotate(spent=Sum("bought_price"), count=Count("id"))
     )
@@ -1581,10 +1679,19 @@ def teams_dashboard(request, slug: str):
             "players": players_by_team.get(t.id, []),
         })
 
+    dashboard_source = (request.GET.get("source") or "").strip().lower()
+    show_navigation = can_manage and dashboard_source not in {"auction", "owner"}
+    show_export = can_manage and dashboard_source != "owner"
+
     return render(
         request,
         "tournaments/teams_dashboard.html",
-        {"tournament": tournament, "teams": enriched},
+        {
+            "tournament": tournament,
+            "teams": enriched,
+            "show_teams_dashboard_navigation": show_navigation,
+            "show_teams_dashboard_export": show_export,
+        },
     )
 
 

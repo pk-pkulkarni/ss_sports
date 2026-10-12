@@ -23,6 +23,7 @@ config/settings.pyc
 # Django / Local
 db.sqlite3
 media/
+load_tests/
 
 # OS
 .DS_Store
@@ -30,3 +31,7 @@ Thumbs.db
 
 # Env files
 .env
+
+# Production load-test secrets and generated reports
+load_tests/accounts.json
+load_tests/results/
