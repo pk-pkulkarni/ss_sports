@@ -68,6 +68,7 @@ urlpatterns = [
     path("t/<slug:slug>/auction/updates/", auction_views.auction_updates_public, name="auction_updates_public"),
     path("t/<slug:slug>/auction/stage/", auction_views.auction_stage_public, name="auction_stage_public"),
     path("t/<slug:slug>/auction/updates/feed/", auction_views.auction_updates_feed, name="auction_updates_feed"),
+    path("t/<slug:slug>/auction/audience/", auction_views.auction_audience_action, name="auction_audience_action"),
 
     # API-like endpoints (POST)
     path("auction/<int:lot_id>/bid/", auction_views.place_bid, name="place_bid"),
@@ -80,6 +81,7 @@ urlpatterns = [
     path("auction/<int:lot_id>/undo_last_bid/", auction_views.undo_last_bid, name="undo_last_bid"),
     path("auction/<int:auction_id>/reopen_unsold/", auction_views.reopen_unsold, name="reopen_unsold"),
     path("auction/<int:auction_id>/end/", auction_views.end_auction, name="end_auction"),
+    path("auction/<int:auction_id>/show-control/", auction_views.auction_show_control, name="auction_show_control"),
 ]
 
 # Media files (DEV only)

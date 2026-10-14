@@ -41,6 +41,13 @@ class Auction(models.Model):
         PAUSED = "PAUSED", "Paused"
         CLOSED = "CLOSED", "Closed"
 
+    class PresentationState(models.TextChoices):
+        LIVE = "LIVE", "Live bidding"
+        REVEAL = "REVEAL", "Player reveal"
+        FINAL_CALL = "FINAL_CALL", "Final call"
+        BREAK = "BREAK", "Break"
+        ANNOUNCEMENT = "ANNOUNCEMENT", "Announcement"
+
     tournament = models.OneToOneField(
         Tournament,
         on_delete=models.CASCADE,
@@ -61,6 +68,17 @@ class Auction(models.Model):
 
     # Optional auction rules/settings (increments, min bid, caps etc.)
     rules = models.JSONField(null=True, blank=True)
+
+    # Persisted show state keeps every stage screen in sync after refresh/reconnect.
+    # It is presentation-only: a deadline never finalizes a player sale.
+    presentation_state = models.CharField(
+        max_length=16,
+        choices=PresentationState.choices,
+        default=PresentationState.LIVE,
+    )
+    presentation_message = models.CharField(max_length=180, blank=True)
+    presentation_deadline = models.DateTimeField(null=True, blank=True)
+    presentation_version = models.PositiveIntegerField(default=0)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -397,6 +415,11 @@ class AuctionEvent(models.Model):
         MILESTONE_1L = "MILESTONE_1L", "Milestone 1L"
         SOLD = "SOLD", "Sold"
         UNSOLD = "UNSOLD", "Unsold"
+        PLAYER_REVEAL = "PLAYER_REVEAL", "Player Reveal"
+        FINAL_CALL = "FINAL_CALL", "Final Call"
+        BREAK = "BREAK", "Break"
+        ANNOUNCEMENT = "ANNOUNCEMENT", "Announcement"
+        SHOW_RESUME = "SHOW_RESUME", "Show Resume"
 
     auction = models.ForeignKey(
         Auction,
@@ -438,6 +461,42 @@ class AuctionEvent(models.Model):
         indexes = [
             models.Index(fields=["auction", "created_at"]),
             models.Index(fields=["auction", "event_type"]),
+        ]
+
+
+class AudiencePrediction(models.Model):
+    auction = models.ForeignKey(Auction, on_delete=models.CASCADE, related_name="audience_predictions")
+    lot = models.ForeignKey(AuctionLot, on_delete=models.CASCADE, related_name="audience_predictions")
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="audience_predictions")
+    session_key = models.CharField(max_length=40)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "audience_prediction"
+        constraints = [
+            models.UniqueConstraint(fields=["lot", "session_key"], name="one_prediction_per_lot_session"),
+        ]
+        indexes = [models.Index(fields=["auction", "lot"])]
+
+
+class AudienceReaction(models.Model):
+    class Reaction(models.TextChoices):
+        CLAP = "CLAP", "Clap"
+        FIRE = "FIRE", "Fire"
+        WOW = "WOW", "Wow"
+
+    auction = models.ForeignKey(Auction, on_delete=models.CASCADE, related_name="audience_reactions")
+    lot = models.ForeignKey(AuctionLot, on_delete=models.CASCADE, related_name="audience_reactions")
+    reaction = models.CharField(max_length=8, choices=Reaction.choices)
+    session_key = models.CharField(max_length=40)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "audience_reaction"
+        indexes = [
+            models.Index(fields=["auction", "lot"]),
+            models.Index(fields=["session_key", "created_at"]),
         ]
 
 

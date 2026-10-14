@@ -70,6 +70,15 @@
         .event-info {
             border-left: 6px solid #94a3b8;
         }
+        .audience-panel { margin-bottom:14px; padding:12px; border:1px solid rgba(56,189,248,.22); border-radius:16px; background:rgba(14,116,144,.09); }
+        .audience-head { display:flex; justify-content:space-between; gap:10px; align-items:center; margin-bottom:9px; }
+        .audience-player { font-weight:900; }
+        .prediction-teams { display:flex; gap:6px; overflow-x:auto; padding-bottom:4px; }
+        .prediction-btn { flex:0 0 auto; min-height:34px!important; padding:.3rem .58rem; border-radius:999px; border:1px solid color-mix(in srgb,var(--team) 60%,white); background:color-mix(in srgb,var(--team) 24%,transparent); color:white; font-size:.72rem; font-weight:850; }
+        .prediction-btn.selected { outline:2px solid var(--accent); outline-offset:1px; }
+        .reaction-row { display:flex; flex-wrap:wrap; gap:7px; align-items:center; margin-top:8px; }
+        .reaction-btn { min-height:34px!important; padding:.3rem .65rem; border-radius:999px; border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.06); color:white; font-weight:800; }
+        .fan-pick { color:#fbbf24; font-size:.72rem; font-weight:850; }
     </style>
 {% endblock %}
 
@@ -95,6 +104,11 @@
         {% if not auction %}
             <div class="muted">No auction found for this tournament.</div>
         {% else %}
+            <div class="audience-panel" id="audiencePanel" data-action-url="{% url 'auction_audience_action' slug=tournament.slug %}" style="display:none">
+                <div class="audience-head"><div><div class="muted" style="font-size:.72rem">Fan prediction</div><div class="audience-player" id="audiencePlayer">Current player</div></div><div class="fan-pick" id="fanPick">Be the first to predict</div></div>
+                <div class="prediction-teams" id="predictionTeams"></div>
+                <div class="reaction-row"><span class="muted" style="font-size:.72rem">React:</span><button class="reaction-btn" type="button" data-reaction="CLAP">👏 <span>0</span></button><button class="reaction-btn" type="button" data-reaction="FIRE">🔥 <span>0</span></button><button class="reaction-btn" type="button" data-reaction="WOW">😮 <span>0</span></button><span class="muted" id="audienceMessage" style="font-size:.7rem"></span></div>
+            </div>
             <div id="feed" class="feed">
                 <div class="muted">Waiting for updates...</div>
             </div>
@@ -115,6 +129,37 @@
             let oldestId = 0;
             let hasOlder = false;
             let loadingOlder = false;
+            const audiencePanel = document.getElementById("audiencePanel");
+            const predictionTeams = document.getElementById("predictionTeams");
+            const fanPick = document.getElementById("fanPick");
+            const audienceMessage = document.getElementById("audienceMessage");
+            let audienceLotId = null;
+            let selectedPrediction = null;
+
+            async function audienceAction(payload) {
+                const res = await fetch(audiencePanel.dataset.actionUrl, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({lot_id:audienceLotId, ...payload})});
+                const out = await res.json().catch(() => ({}));
+                if (!res.ok || out.ok === false) throw new Error(out.error || "Action failed");
+                return out;
+            }
+
+            function renderAudience(snapshot) {
+                const lot = snapshot?.current_lot;
+                if (!lot) { audiencePanel.style.display = "none"; return; }
+                audiencePanel.style.display = "block";
+                if (audienceLotId !== lot.id) { audienceLotId = lot.id; selectedPrediction = null; }
+                document.getElementById("audiencePlayer").textContent = lot.player.name;
+                predictionTeams.innerHTML = (snapshot.leaderboard || []).map(team => `<button type="button" class="prediction-btn ${selectedPrediction===team.id?'selected':''}" data-team-id="${team.id}" style="--team:${team.primary_color};--accent:${team.accent_color}">${team.short_name || team.name}</button>`).join("");
+                const predictions = snapshot.audience?.predictions || [];
+                const top = predictions[0]; fanPick.textContent = top ? `Fan pick: ${top.short_name} (${top.count})` : "Be the first to predict";
+                document.querySelectorAll("[data-reaction]").forEach(button => { button.querySelector("span").textContent = snapshot.audience?.reactions?.[button.dataset.reaction] || 0; });
+            }
+
+            predictionTeams?.addEventListener("click", async event => {
+                const button = event.target.closest("[data-team-id]"); if (!button) return;
+                try { button.disabled=true; const out=await audienceAction({action:"PREDICT",team_id:Number(button.dataset.teamId)}); selectedPrediction=Number(button.dataset.teamId); audienceMessage.textContent="Prediction saved"; document.querySelectorAll(".prediction-btn").forEach(x=>x.classList.toggle("selected",x===button)); if(out.audience?.predictions?.[0]) fanPick.textContent=`Fan pick: ${out.audience.predictions[0].short_name} (${out.audience.predictions[0].count})`; } catch(error) { audienceMessage.textContent=error.message; } finally { button.disabled=false; }
+            });
+            document.querySelectorAll("[data-reaction]").forEach(button => button.addEventListener("click", async () => { try { button.disabled=true; const out=await audienceAction({action:"REACT",reaction:button.dataset.reaction}); button.querySelector("span").textContent=out.audience?.reactions?.[button.dataset.reaction]||0; audienceMessage.textContent="Reaction sent"; } catch(error) { audienceMessage.textContent=error.message; } finally { setTimeout(()=>button.disabled=false,800); } }));
 
             function createEventEl(e) {
                 const div = document.createElement("div");
@@ -175,6 +220,7 @@
                 if (!res.ok || out.ok === false) return;
 
                 const events = out.events || [];
+                renderAudience(out.snapshot);
                 if (!events.length) {
                     if (!lastId) {
                         hasOlder = !!out.has_older;

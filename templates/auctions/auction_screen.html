@@ -601,6 +601,21 @@
             font-size: .92rem;
             margin-top: 4px;
         }
+        .showControl {
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 18px;
+            border: 1px solid rgba(56, 189, 248, .25);
+            background: linear-gradient(135deg, rgba(14, 116, 144, .14), rgba(15, 23, 42, .62));
+        }
+        .showControlHead { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:9px; }
+        .showControlTitle { font-weight:950; }
+        .showControlState { padding:.25rem .6rem; border-radius:999px; background:rgba(56,189,248,.13); border:1px solid rgba(56,189,248,.3); color:#bae6fd; font-size:.72rem; font-weight:900; }
+        .showControlActions { display:flex; flex-wrap:wrap; gap:7px; }
+        .showControlActions .btn { min-height:36px; padding:.35rem .65rem; font-size:.78rem; }
+        .announcementRow { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:7px; margin-top:8px; }
+        .announcementRow input { min-width:0; border-radius:11px; border:1px solid rgba(255,255,255,.15); background:rgba(2,6,23,.5); color:white; padding:.45rem .65rem; }
+        .shortcutHint { margin-top:7px; color:rgba(243,247,255,.55); font-size:.68rem; }
     </style>
 {% endblock %}
 
@@ -784,6 +799,24 @@
                         </div>
                     </div>
 
+                    <div class="showControl" id="showControlPanel" data-endpoint="{% url 'auction_show_control' auction_id=auction.id %}">
+                        <div class="showControlHead">
+                            <div><div class="showControlTitle">Stage Show Control</div><div class="muted" style="font-size:.72rem;">Presentation only — these controls never sell a player.</div><div class="muted" id="nextPlayerPreview" style="font-size:.72rem;margin-top:2px;">Next preview: {% if next_preview %}Lot {{ next_preview.lot_no }} · {{ next_preview.name }}{% if next_preview.role %} · {{ next_preview.role }}{% endif %}{% else %}No later pending player{% endif %}</div></div>
+                            <span class="showControlState" id="showControlState">{{ auction.get_presentation_state_display }}</span>
+                        </div>
+                        <div class="showControlActions">
+                            <button class="btn btn-soft" type="button" data-show-action="reveal">Reveal Player</button>
+                            <button class="btn btn-soft" type="button" data-show-action="final_call" data-seconds="5">Final Call 5s</button>
+                            <button class="btn btn-soft" type="button" data-show-action="final_call" data-seconds="10">Final Call 10s</button>
+                            <button class="btn btn-soft" type="button" data-show-action="break">Break Screen</button>
+                            <button class="btn btn-soft" type="button" data-show-action="resume">Resume Live</button>
+                            <a class="btn btn-outline-light" href="{% url 'auction_stage_public' slug=tournament.slug %}" target="_blank" rel="noopener">Open Stage</a>
+                            <button class="btn btn-outline-light" id="downloadLastSold" type="button" disabled>Download Last Sold Card</button>
+                        </div>
+                        <div class="announcementRow"><input id="showAnnouncement" maxlength="180" placeholder="Short stage announcement"><button class="btn btn-soft" type="button" data-show-action="announce">Send</button></div>
+                        <div class="shortcutHint">Shortcuts: R reveal · F final call · Esc resume · Alt+1…0 bid for teams 1–10 · Shift+S sold · Shift+U unsold · Shift+Z undo</div>
+                    </div>
+
                     <div class="statsPanel" id="highestSoldPanel">
                         <div class="statLabel">Highest Sold (so far)</div>
                         <div class="statValue" id="highestSoldPrice">
@@ -908,7 +941,7 @@
                         </div>
 
                         <div class="teamBtns">
-                            <button class="btn-bid2 bidBtn" data-team-id="{{ team.id }}">BID</button>
+                            <button class="btn-bid2 bidBtn" data-team-id="{{ team.id }}" data-shortcut="{% if forloop.counter == 10 %}0{% else %}{{ forloop.counter }}{% endif %}">BID</button>
                         </div>
                     </div>
                 {% endfor %}
@@ -1206,6 +1239,8 @@
 
                 const out = await postJSON(`/auction/${getLotId()}/next/`, {});   // uses wrap-around logic now
                 const n = out.next;
+                const previewEl = document.getElementById("nextPlayerPreview");
+                if (previewEl) previewEl.textContent = out.preview ? `Next preview: Lot ${out.preview.lot_no} · ${out.preview.name}${out.preview.role ? ` · ${out.preview.role}` : ""}` : "Next preview: No later pending player";
                 basePrice = Number(n.player.base || 0);
                 renderStats(n.player.stats || {});
                 updateBidButtons();
@@ -1401,7 +1436,7 @@
                     // Update button label
                     btn.innerHTML = `
                       <div style="line-height:1.05;text-align:center;">
-                        <div style="font-size:.75rem;opacity:.85">${next.label}</div>
+                        <div style="font-size:.75rem;opacity:.85">${next.label}${btn.dataset.shortcut ? " · Alt+" + btn.dataset.shortcut : ""}</div>
                         <div style="font-size:.95rem;font-weight:900">
                           ${formatINR(next.amount)}
                         </div>
@@ -1953,6 +1988,111 @@
             setActive("auction");
         })();
 
+    </script>
+    <script>
+      (() => {
+        const panel = document.getElementById("showControlPanel");
+        if (!panel) return;
+        const endpoint = panel.dataset.endpoint;
+        const stateEl = document.getElementById("showControlState");
+        const announcement = document.getElementById("showAnnouncement");
+        const downloadButton = document.getElementById("downloadLastSold");
+        let latestSoldCard = null;
+
+        async function showAction(action, extra = {}) {
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: {"Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest"},
+            body: JSON.stringify({action, ...extra}),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || data.ok === false) throw new Error(data.error || "Show control failed");
+          if (stateEl && data.presentation) stateEl.textContent = data.presentation.state_display;
+          if (typeof showToast === "function") showToast(`Stage: ${data.presentation.state_display}`);
+          return data;
+        }
+
+        panel.querySelectorAll("[data-show-action]").forEach(button => {
+          button.addEventListener("click", async () => {
+            const action = button.dataset.showAction;
+            const original = button.textContent;
+            button.disabled = true;
+            try {
+              const extra = {};
+              if (button.dataset.seconds) extra.seconds = Number(button.dataset.seconds);
+              if (action === "announce") extra.message = (announcement?.value || "").trim();
+              await showAction(action, extra);
+              if (action === "announce" && announcement) announcement.value = "";
+            } catch (error) {
+              if (typeof showToast === "function") showToast(error.message || "Show control failed", true);
+            } finally {
+              button.disabled = false;
+              button.textContent = original;
+            }
+          });
+        });
+
+        async function loadLastSold() {
+          try {
+            const response = await fetch("{% url 'auction_updates_feed' slug=tournament.slug %}", {cache: "no-store"});
+            const data = await response.json();
+            latestSoldCard = data?.snapshot?.latest_sale || null;
+            if (downloadButton) downloadButton.disabled = !latestSoldCard;
+          } catch (error) {}
+        }
+
+        function wrapText(context, text, x, y, maxWidth, lineHeight) {
+          let line = "", currentY = y;
+          for (const word of String(text || "").split(" ")) {
+            const test = `${line}${word} `;
+            if (context.measureText(test).width > maxWidth && line) {
+              context.fillText(line, x, currentY); line = `${word} `; currentY += lineHeight;
+            } else line = test;
+          }
+          context.fillText(line, x, currentY);
+        }
+
+        function loadImage(source) {
+          return new Promise((resolve, reject) => {
+            const image = new Image(); image.onload = () => resolve(image); image.onerror = reject; image.src = source;
+          });
+        }
+
+        downloadButton?.addEventListener("click", async () => {
+          const sale = latestSoldCard; if (!sale) return;
+          const canvas = document.createElement("canvas"); canvas.width = 1600; canvas.height = 900;
+          const context = canvas.getContext("2d"); const gradient = context.createLinearGradient(0, 0, 1600, 900);
+          gradient.addColorStop(0, sale.primary_color || "#0f172a"); gradient.addColorStop(1, "#020617");
+          context.fillStyle = gradient; context.fillRect(0, 0, 1600, 900); context.fillStyle = sale.accent_color || "#fbbf24"; context.fillRect(0, 0, 24, 900);
+          context.fillStyle = "#fbbf24"; context.font = "900 54px Poppins, sans-serif"; context.fillText("SOLD", 680, 210);
+          context.fillStyle = "#ffffff"; context.font = "900 88px Poppins, sans-serif"; wrapText(context, sale.player, 680, 330, 820, 100);
+          context.font = "700 46px Poppins, sans-serif"; context.fillText(sale.team, 680, 560);
+          context.fillStyle = "#fbbf24"; context.font = "900 92px Poppins, sans-serif"; context.fillText(sale.price_display, 680, 690);
+          context.fillStyle = "#cbd5e1"; context.font = "600 30px Poppins, sans-serif"; context.fillText("{{ tournament.name|escapejs }}", 680, 780);
+          try { const image = await loadImage(sale.player_photo || "{% static 'img/player-placeholder.png' %}"); context.drawImage(image, 70, 100, 520, 700); } catch (error) {}
+          const link = document.createElement("a"); link.download = `sold-${String(sale.player).replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.png`; link.href = canvas.toDataURL("image/png"); link.click();
+        });
+
+        document.getElementById("markSold")?.addEventListener("click", () => setTimeout(loadLastSold, 900));
+        document.addEventListener("keydown", async event => {
+          const target = event.target;
+          if (target && (target.matches("input, textarea, select") || target.isContentEditable)) return;
+          if (document.querySelector(".modal.show")) return;
+          const key = event.key.toLowerCase();
+          try {
+            if (event.altKey && /^[0-9]$/.test(event.key)) { event.preventDefault(); const bidButton = document.querySelector(`.bidBtn[data-shortcut="${event.key}"]`); if (bidButton && !bidButton.disabled) bidButton.click(); }
+            else if (event.key === "Escape") { event.preventDefault(); await showAction("resume"); }
+            else if (!event.shiftKey && key === "r") { event.preventDefault(); await showAction("reveal"); }
+            else if (!event.shiftKey && key === "f") { event.preventDefault(); await showAction("final_call", {seconds: 10}); }
+            else if (event.shiftKey && key === "s") { event.preventDefault(); if (confirm("Mark the current player SOLD to the highest bidder?")) document.getElementById("markSold")?.click(); }
+            else if (event.shiftKey && key === "u") { event.preventDefault(); if (confirm("Mark the current player UNSOLD?")) document.getElementById("markUnsold")?.click(); }
+            else if (event.shiftKey && key === "z") { event.preventDefault(); if (confirm("Undo the last valid bid?")) document.getElementById("undoBid")?.click(); }
+          } catch (error) {
+            if (typeof showToast === "function") showToast(error.message || "Shortcut failed", true);
+          }
+        });
+        loadLastSold();
+      })();
     </script>
 
 {% endblock %}

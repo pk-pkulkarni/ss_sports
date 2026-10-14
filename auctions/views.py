@@ -1,5 +1,6 @@
 import json
 from decimal import Decimal
+from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -8,11 +9,21 @@ from django.shortcuts import render, get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_GET
 from django.db import transaction
-from django.db.models import Q, Count
+from django.db.models import Q, Count, F, Max, Sum
+from django.utils import timezone
 
 from tournaments.models import Tournament
 from tournaments.permissions import can_manage_tournament
-from .models import AuctionLot, Bid, Team, TeamPlayer, Auction, AuctionEvent
+from .models import (
+    AuctionLot,
+    Bid,
+    Team,
+    TeamPlayer,
+    Auction,
+    AuctionEvent,
+    AudiencePrediction,
+    AudienceReaction,
+)
 from .rules import PRICE_CAP_VALUES, normalize_auction_rules
 from .templatetags.inr import inr as inr_format
 
@@ -352,6 +363,9 @@ def _serialize_auction_event(event: AuctionEvent) -> dict:
         "time": event.created_at.strftime("%H:%M:%S"),
         "player": event.player.name if event.player_id else "",
         "team": event.team.name if event.team_id else "",
+        "team_logo": event.team.logo.url if event.team_id and event.team.logo else "",
+        "team_primary_color": event.team.primary_color if event.team_id else "",
+        "team_secondary_color": event.team.secondary_color if event.team_id else "",
         "lot_no": event.lot.lot_no if event.lot_id else None,
         "amount": str(event.amount or 0),
         "amount_display": _format_amount(event.amount or 0) if event.amount is not None else "",
@@ -401,6 +415,32 @@ def _serialize_stage_lot(lot: AuctionLot | None) -> dict | None:
 
     current_bid = _get_current_highest(lot)
     leading_team = _get_highest_team(lot)
+    valid_bids = list(
+        Bid.objects.filter(lot=lot, is_valid=True)
+        .select_related("team")
+        .order_by("-amount", "-bid_time", "-id")[:100]
+    )
+    bidder_ids = {bid.team_id for bid in valid_bids}
+    head_to_head = []
+    seen_teams = set()
+    for bid in valid_bids:
+        if bid.team_id in seen_teams:
+            continue
+        seen_teams.add(bid.team_id)
+        head_to_head.append(
+            {
+                "id": bid.team_id,
+                "name": bid.team.name,
+                "short_name": bid.team.short_name or bid.team.name[:3].upper(),
+                "logo": bid.team.logo.url if bid.team.logo else "",
+                "primary_color": bid.team.primary_color,
+                "secondary_color": bid.team.secondary_color,
+                "amount": str(bid.amount),
+                "amount_display": _format_amount(bid.amount),
+            }
+        )
+        if len(head_to_head) == 2:
+            break
 
     team_payload = None
     if leading_team:
@@ -423,7 +463,14 @@ def _serialize_stage_lot(lot: AuctionLot | None) -> dict | None:
         "base_price_display": _format_amount(lot.base_price_snapshot or 0),
         "current_bid": str(current_bid or 0),
         "current_bid_display": _format_amount(current_bid or 0),
+        "next_bid_display": _format_amount(
+            lot.base_price_snapshot if not valid_bids else _allowed_next_amount(current_bid)
+        ),
         "leading_team": team_payload,
+        "bid_count": len(valid_bids),
+        "bidder_count": len(bidder_ids),
+        "bidding_war": len(valid_bids) >= 4 and len(bidder_ids) >= 2,
+        "head_to_head": head_to_head,
         "player": {
             "id": lot.player_id,
             "name": lot.player.name,
@@ -451,9 +498,33 @@ def _latest_sale_payload(auction: Auction) -> dict | None:
     if not latest_sale:
         return None
 
+    sale_bids = Bid.objects.filter(lot=latest_sale.lot, is_valid=True)
+    bid_count = sale_bids.count()
+    bidder_count = sale_bids.values("team_id").distinct().count()
+    previous_record = (
+        AuctionLot.objects.filter(
+            auction=auction,
+            status=AuctionLot.Status.SOLD,
+            sold_price__isnull=False,
+        )
+        .exclude(pk=latest_sale.lot_id)
+        .aggregate(value=Max("sold_price"))["value"]
+    )
+    price = Decimal(latest_sale.amount or 0)
+    if previous_record is None or price > Decimal(previous_record):
+        celebration_tier = "record"
+    elif price >= Decimal("400000"):
+        celebration_tier = "milestone"
+    elif bid_count >= 4 and bidder_count >= 2:
+        celebration_tier = "competitive"
+    else:
+        celebration_tier = "normal"
+
     return {
         "id": latest_sale.id,
         "player": latest_sale.player.name if latest_sale.player_id else "",
+        "player_photo": latest_sale.player.photo.url if latest_sale.player_id and latest_sale.player.photo else "",
+        "player_role": latest_sale.player.get_role_display() if latest_sale.player_id and latest_sale.player.role else "",
         "team": latest_sale.team.name if latest_sale.team_id else "",
         "team_logo": latest_sale.team.logo.url if latest_sale.team_id and latest_sale.team.logo else "",
         "primary_color": latest_sale.team.primary_color if latest_sale.team_id else "#0F172A",
@@ -463,6 +534,9 @@ def _latest_sale_payload(auction: Auction) -> dict | None:
         "price": str(latest_sale.amount or 0),
         "price_display": _format_amount(latest_sale.amount or 0),
         "time": latest_sale.created_at.strftime("%H:%M:%S"),
+        "bid_count": bid_count,
+        "bidder_count": bidder_count,
+        "celebration_tier": celebration_tier,
     }
 
 
@@ -511,9 +585,134 @@ def _stage_leaderboard(auction: Auction) -> list[dict]:
     ]
 
 
+def _presentation_payload(auction: Auction) -> dict:
+    return {
+        "state": auction.presentation_state,
+        "state_display": auction.get_presentation_state_display(),
+        "message": auction.presentation_message or "",
+        "deadline": auction.presentation_deadline.isoformat() if auction.presentation_deadline else None,
+        "version": auction.presentation_version,
+        "server_time": timezone.now().isoformat(),
+    }
+
+
+def _stage_storylines(auction: Auction) -> dict:
+    most_contested = (
+        AuctionLot.objects.filter(auction=auction)
+        .annotate(valid_bid_count=Count("bids", filter=Q(bids__is_valid=True)))
+        .filter(valid_bid_count__gt=0)
+        .select_related("player")
+        .order_by("-valid_bid_count", "lot_no", "lot_order")
+        .first()
+    )
+    biggest_spender = (
+        Team.objects.filter(tournament=auction.tournament, is_active=True)
+        .annotate(
+            auction_spend=Sum(
+                "won_lots__sold_price",
+                filter=Q(won_lots__auction=auction, won_lots__status=AuctionLot.Status.SOLD),
+            )
+        )
+        .order_by("-auction_spend", "name")
+        .first()
+    )
+    purse_king = (
+        Team.objects.filter(tournament=auction.tournament, is_active=True)
+        .order_by("-purse_remaining", "name")
+        .first()
+    )
+    return {
+        "most_contested": {
+            "player": most_contested.player.name,
+            "bid_count": most_contested.valid_bid_count,
+        } if most_contested else None,
+        "biggest_spender": {
+            "team": biggest_spender.name,
+            "amount_display": _format_amount(biggest_spender.auction_spend or 0),
+        } if biggest_spender and biggest_spender.auction_spend else None,
+        "purse_king": {
+            "team": purse_king.name,
+            "amount_display": _format_amount(purse_king.purse_remaining or 0),
+        } if purse_king else None,
+    }
+
+
+def _audience_payload(auction: Auction, current_lot: AuctionLot | None) -> dict:
+    if not current_lot:
+        return {"lot_id": None, "predictions": [], "reactions": {"CLAP": 0, "FIRE": 0, "WOW": 0}}
+    predictions = list(
+        AudiencePrediction.objects.filter(auction=auction, lot=current_lot)
+        .values("team_id", "team__name", "team__short_name", "team__primary_color", "team__accent_color")
+        .annotate(count=Count("id"))
+        .order_by("-count", "team__name")
+    )
+    reaction_rows = (
+        AudienceReaction.objects.filter(auction=auction, lot=current_lot)
+        .values("reaction")
+        .annotate(count=Count("id"))
+    )
+    reactions = {"CLAP": 0, "FIRE": 0, "WOW": 0}
+    for row in reaction_rows:
+        reactions[row["reaction"]] = row["count"]
+    return {
+        "lot_id": current_lot.id,
+        "predictions": [
+            {
+                "team_id": row["team_id"],
+                "team": row["team__name"],
+                "short_name": row["team__short_name"] or row["team__name"][:3].upper(),
+                "primary_color": row["team__primary_color"],
+                "accent_color": row["team__accent_color"],
+                "count": row["count"],
+            }
+            for row in predictions
+        ],
+        "reactions": reactions,
+    }
+
+
+def _auction_recap(auction: Auction) -> dict:
+    sold_lots = list(
+        AuctionLot.objects.filter(
+            auction=auction,
+            status=AuctionLot.Status.SOLD,
+            sold_price__isnull=False,
+        )
+        .select_related("player", "sold_to_team")
+        .order_by("-sold_price", "lot_no", "lot_order")
+    )
+    value_candidates = [lot for lot in sold_lots if Decimal(lot.base_price_snapshot or 0) > 0]
+    value_buy = min(
+        value_candidates,
+        key=lambda lot: (
+            Decimal(lot.sold_price or 0) / Decimal(lot.base_price_snapshot),
+            Decimal(lot.sold_price or 0),
+        ),
+        default=None,
+    )
+    return {
+        "top_purchases": [
+            {
+                "player": lot.player.name,
+                "team": lot.sold_to_team.name if lot.sold_to_team else "",
+                "price_display": _format_amount(lot.sold_price or 0),
+            }
+            for lot in sold_lots[:5]
+        ],
+        "value_buy": {
+            "player": value_buy.player.name,
+            "team": value_buy.sold_to_team.name if value_buy.sold_to_team else "",
+            "price_display": _format_amount(value_buy.sold_price or 0),
+            "rule": "Lowest sold-price to base-price ratio",
+        } if value_buy else None,
+    }
+
+
 def _public_auction_snapshot(auction: Auction) -> dict:
     current_lot, _auction_rules_config = _current_lot_for_auction(auction)
     completion = _auction_completion_summary(auction)
+    total_players = AuctionLot.objects.filter(auction=auction).exclude(status=AuctionLot.Status.WITHDRAWN).count()
+    sold_total = completion["sold_total"]
     return {
         "auction_id": auction.id,
         "auction_name": auction.name,
@@ -524,11 +723,17 @@ def _public_auction_snapshot(auction: Auction) -> dict:
         "current_lot": _serialize_stage_lot(current_lot),
         "latest_sale": _latest_sale_payload(auction),
         "highest_sold": completion["highest_sold"],
-        "sold_total": completion["sold_total"],
+        "sold_total": sold_total,
         "unsold_total": completion["unsold_total"],
+        "total_players": total_players,
+        "progress_percent": round((sold_total / total_players) * 100) if total_players else 0,
         "auction_completed": completion["auction_completed"],
         "auction_fully_completed": completion["auction_fully_completed"],
         "leaderboard": _stage_leaderboard(auction),
+        "presentation": _presentation_payload(auction),
+        "storylines": _stage_storylines(auction),
+        "audience": _audience_payload(auction, current_lot),
+        "recap": _auction_recap(auction) if completion["auction_completed"] else None,
     }
 
 
@@ -625,6 +830,7 @@ def auction_screen(request, slug: str):
     auction_fully_completed = False
     sold_total = 0
     unsold_total = 0
+    next_preview = None
 
     if auction:
         current_lot, auction_rules_config = _current_lot_for_auction(auction)
@@ -640,6 +846,22 @@ def auction_screen(request, slug: str):
                 "price": Decimal(completion["highest_sold"]["price"] or 0),
                 "lot_no": completion["highest_sold"]["lot_no"],
             }
+        if current_lot:
+            preview_qs = (
+                AuctionLot.objects.filter(auction=auction, status=AuctionLot.Status.PENDING)
+                .exclude(pk=current_lot.pk)
+                .select_related("player")
+            )
+            restricted_lot_no, _preview_rules = _active_restricted_lot(auction)
+            if restricted_lot_no:
+                preview_qs = preview_qs.filter(lot_no=restricted_lot_no)
+            preview_lot = preview_qs.order_by("lot_no", "lot_order", "id").first()
+            if preview_lot:
+                next_preview = {
+                    "name": preview_lot.player.name,
+                    "lot_no": preview_lot.lot_no,
+                    "role": preview_lot.player.get_role_display() if preview_lot.player.role else "",
+                }
     else:
         auction_rules_config = normalize_auction_rules(None)
 
@@ -662,6 +884,7 @@ def auction_screen(request, slug: str):
             "sold_total": sold_total,
             "unsold_total": unsold_total,
             "auction_rules_config": auction_rules_config,
+            "next_preview": next_preview,
         },
     )
 
@@ -785,6 +1008,27 @@ def place_bid(request, lot_id: int):
         )
         _maybe_log_milestone(lot, next_amount)
 
+        # A valid bid always interrupts a reveal/final-call presentation. This
+        # changes only what Stage Mode shows; it never decides the auction.
+        auction_for_show = Auction.objects.select_for_update().get(pk=lot.auction_id)
+        if auction_for_show.presentation_state in [
+            Auction.PresentationState.REVEAL,
+            Auction.PresentationState.FINAL_CALL,
+        ]:
+            auction_for_show.presentation_state = Auction.PresentationState.LIVE
+            auction_for_show.presentation_message = ""
+            auction_for_show.presentation_deadline = None
+            auction_for_show.presentation_version += 1
+            auction_for_show.save(
+                update_fields=[
+                    "presentation_state",
+                    "presentation_message",
+                    "presentation_deadline",
+                    "presentation_version",
+                    "updated_at",
+                ]
+            )
+
     return JsonResponse(
         {
             "ok": True,
@@ -876,6 +1120,13 @@ def mark_sold(request, lot_id: int):
         )
         _relist_restricted_unsold_if_needed(lot.auction)
 
+        Auction.objects.filter(pk=lot.auction_id).update(
+            presentation_state=Auction.PresentationState.LIVE,
+            presentation_message="",
+            presentation_deadline=None,
+            presentation_version=F("presentation_version") + 1,
+        )
+
         done = _auto_complete_auction_if_done(lot.auction)
         fully_done = not AuctionLot.objects.filter(
             auction=lot.auction,
@@ -906,6 +1157,7 @@ def mark_sold(request, lot_id: int):
             AuctionLot.Status.UNSOLD,
         ],
     ).count()
+    sold_card = _latest_sale_payload(lot.auction)
 
     return JsonResponse(
         {
@@ -918,6 +1170,7 @@ def mark_sold(request, lot_id: int):
             "auction_fully_completed": fully_done,
             "highest_sold": highest_sold,
             "counts": {"sold": sold_total, "unsold": unsold_total},
+            "sold_card": sold_card,
         }
     )
 
@@ -956,6 +1209,13 @@ def mark_unsold(request, lot_id: int):
         message=f"{lot.player.name} went UNSOLD.",
         lot=lot,
         player=lot.player,
+    )
+
+    Auction.objects.filter(pk=lot.auction_id).update(
+        presentation_state=Auction.PresentationState.LIVE,
+        presentation_message="",
+        presentation_deadline=None,
+        presentation_version=F("presentation_version") + 1,
     )
 
     _relist_restricted_unsold_if_needed(lot.auction)
@@ -1031,6 +1291,7 @@ def next_lot(request, lot_id: int):
 
     _ensure_lot_start_event(next_l)
     appearance_no = _appearance_no(next_l)
+    preview_lot = qs.exclude(pk=next_l.pk).order_by("lot_no", "lot_order", "id").first()
 
     return JsonResponse(
         {
@@ -1051,6 +1312,11 @@ def next_lot(request, lot_id: int):
                     "stats": next_l.player.stats or {},
                 },
             },
+            "preview": {
+                "name": preview_lot.player.name,
+                "lot_no": preview_lot.lot_no,
+                "role": preview_lot.player.get_role_display() if preview_lot and preview_lot.player.role else "",
+            } if preview_lot else None,
         }
     )
 
@@ -1291,6 +1557,156 @@ def reopen_unsold(request, auction_id: int):
             auction.save(update_fields=["status", "updated_at"])
 
     return JsonResponse({"ok": True, "reopened": reopened})
+
+
+@login_required
+@require_POST
+@csrf_exempt
+def auction_show_control(request, auction_id: int):
+    auction = get_object_or_404(Auction.objects.select_related("tournament"), pk=auction_id)
+    if not can_manage_tournament(request.user, auction.tournament):
+        return JsonResponse({"ok": False, "error": "Forbidden"}, status=403)
+
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except (TypeError, ValueError, UnicodeDecodeError):
+        return JsonResponse({"ok": False, "error": "Invalid JSON payload."}, status=400)
+
+    action = str(payload.get("action") or "").strip().lower()
+    message = str(payload.get("message") or "").strip()[:180]
+    current_lot, _rules = _current_lot_for_auction(auction)
+
+    action_config = {
+        "reveal": (
+            Auction.PresentationState.REVEAL,
+            AuctionEvent.EventType.PLAYER_REVEAL,
+            f"Now presenting {current_lot.player.name}" if current_lot else "Player reveal",
+        ),
+        "break": (
+            Auction.PresentationState.BREAK,
+            AuctionEvent.EventType.BREAK,
+            message or "Auction break — we will be back shortly",
+        ),
+        "announce": (
+            Auction.PresentationState.ANNOUNCEMENT,
+            AuctionEvent.EventType.ANNOUNCEMENT,
+            message,
+        ),
+        "resume": (
+            Auction.PresentationState.LIVE,
+            AuctionEvent.EventType.SHOW_RESUME,
+            "Live bidding resumed",
+        ),
+    }
+
+    deadline = None
+    if action == "final_call":
+        try:
+            seconds = int(payload.get("seconds", 10))
+        except (TypeError, ValueError):
+            seconds = 10
+        if seconds not in [5, 10, 15]:
+            return JsonResponse({"ok": False, "error": "Final call must be 5, 10, or 15 seconds."}, status=400)
+        state = Auction.PresentationState.FINAL_CALL
+        event_type = AuctionEvent.EventType.FINAL_CALL
+        event_message = message or f"Final call — {seconds} seconds"
+        deadline = timezone.now() + timedelta(seconds=seconds)
+    elif action in action_config:
+        state, event_type, event_message = action_config[action]
+    else:
+        return JsonResponse({"ok": False, "error": "Unknown show-control action."}, status=400)
+
+    if action == "reveal" and not current_lot:
+        return JsonResponse({"ok": False, "error": "There is no current player to reveal."}, status=400)
+    if action == "announce" and not message:
+        return JsonResponse({"ok": False, "error": "Enter an announcement first."}, status=400)
+
+    with transaction.atomic():
+        locked = Auction.objects.select_for_update().get(pk=auction.pk)
+        locked.presentation_state = state
+        locked.presentation_message = event_message if state != Auction.PresentationState.LIVE else ""
+        locked.presentation_deadline = deadline
+        locked.presentation_version += 1
+        locked.save(
+            update_fields=[
+                "presentation_state",
+                "presentation_message",
+                "presentation_deadline",
+                "presentation_version",
+                "updated_at",
+            ]
+        )
+        _log_event(
+            auction=locked,
+            event_type=event_type,
+            level=AuctionEvent.Level.INFO,
+            message=event_message,
+            lot=current_lot,
+            player=current_lot.player if current_lot else None,
+        )
+
+    return JsonResponse({"ok": True, "presentation": _presentation_payload(locked)})
+
+
+@require_POST
+@csrf_exempt
+def auction_audience_action(request, slug: str):
+    tournament = get_object_or_404(Tournament.objects.select_related("auction"), slug=slug)
+    auction = getattr(tournament, "auction", None)
+    if not auction:
+        return JsonResponse({"ok": False, "error": "No auction found."}, status=404)
+    current_lot, _rules = _current_lot_for_auction(auction)
+    if not current_lot:
+        return JsonResponse({"ok": False, "error": "There is no current player."}, status=400)
+
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except (TypeError, ValueError, UnicodeDecodeError):
+        return JsonResponse({"ok": False, "error": "Invalid JSON payload."}, status=400)
+    try:
+        lot_id = int(payload.get("lot_id"))
+    except (TypeError, ValueError):
+        lot_id = 0
+    if lot_id != current_lot.id:
+        return JsonResponse({"ok": False, "error": "That player is no longer current."}, status=409)
+
+    if not request.session.session_key:
+        request.session.create()
+    session_key = request.session.session_key
+    action = str(payload.get("action") or "").upper()
+
+    if action == "PREDICT":
+        try:
+            team_id = int(payload.get("team_id"))
+        except (TypeError, ValueError):
+            return JsonResponse({"ok": False, "error": "Choose a team."}, status=400)
+        team = get_object_or_404(Team, pk=team_id, tournament=tournament, is_active=True)
+        AudiencePrediction.objects.update_or_create(
+            auction=auction,
+            lot=current_lot,
+            session_key=session_key,
+            defaults={"team": team},
+        )
+    elif action == "REACT":
+        reaction = str(payload.get("reaction") or "").upper()
+        if reaction not in AudienceReaction.Reaction.values:
+            return JsonResponse({"ok": False, "error": "Unknown reaction."}, status=400)
+        recent_exists = AudienceReaction.objects.filter(
+            session_key=session_key,
+            created_at__gte=timezone.now() - timedelta(seconds=2),
+        ).exists()
+        if recent_exists:
+            return JsonResponse({"ok": False, "error": "Please wait before reacting again."}, status=429)
+        AudienceReaction.objects.create(
+            auction=auction,
+            lot=current_lot,
+            reaction=reaction,
+            session_key=session_key,
+        )
+    else:
+        return JsonResponse({"ok": False, "error": "Unknown audience action."}, status=400)
+
+    return JsonResponse({"ok": True, "audience": _audience_payload(auction, current_lot)})
 
 
 @require_GET

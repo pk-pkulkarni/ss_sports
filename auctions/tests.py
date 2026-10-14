@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -6,7 +7,7 @@ from django.urls import reverse
 
 from tournaments.models import Tournament
 
-from .models import Auction, AuctionEvent, AuctionLot, Player, Team, TeamPlayer
+from .models import Auction, AuctionEvent, AuctionLot, Bid, Player, Team, TeamPlayer
 from .rules import AUCTION_TYPE_RULE_BASED, RULE_LOT1, RULE_LOT1_AND_LOT2, RULE_PRICE_CAPS
 
 
@@ -237,3 +238,80 @@ class AuctionRulesTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Auction Stage")
+
+    def test_show_control_persists_reveal_without_changing_lot(self):
+        lot = self.create_lot("Reveal Player", lot_no=1)
+        response = self.client.post(
+            reverse("auction_show_control", kwargs={"auction_id": self.auction.id}),
+            data=json.dumps({"action": "reveal"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.auction.refresh_from_db()
+        lot.refresh_from_db()
+        self.assertEqual(self.auction.presentation_state, Auction.PresentationState.REVEAL)
+        self.assertEqual(lot.status, AuctionLot.Status.PENDING)
+        self.assertTrue(
+            AuctionEvent.objects.filter(
+                auction=self.auction,
+                event_type=AuctionEvent.EventType.PLAYER_REVEAL,
+            ).exists()
+        )
+
+    def test_final_call_never_sells_and_valid_bid_resets_it(self):
+        team = self.create_team("Final Call XI")
+        lot = self.create_lot("Final Call Player", lot_no=1)
+        response = self.client.post(
+            reverse("auction_show_control", kwargs={"auction_id": self.auction.id}),
+            data=json.dumps({"action": "final_call", "seconds": 5}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        lot.refresh_from_db()
+        self.assertEqual(lot.status, AuctionLot.Status.PENDING)
+        self.assertIsNone(lot.sold_to_team)
+
+        bid_response = self.client.post(
+            reverse("place_bid", kwargs={"lot_id": lot.id}),
+            data=json.dumps({"team_id": team.id}),
+            content_type="application/json",
+        )
+        self.assertEqual(bid_response.status_code, 200)
+        self.auction.refresh_from_db()
+        self.assertEqual(self.auction.presentation_state, Auction.PresentationState.LIVE)
+        self.assertIsNone(self.auction.presentation_deadline)
+        self.assertEqual(Bid.objects.filter(lot=lot, is_valid=True).count(), 1)
+
+    def test_stage_snapshot_supports_ten_teams_and_competition_data(self):
+        teams = [self.create_team(f"Stage Team {idx + 1}") for idx in range(10)]
+        lot = self.create_lot("Battle Player", lot_no=1)
+        for idx in range(4):
+            Bid.objects.create(
+                lot=lot,
+                team=teams[idx % 2],
+                amount=Decimal("100000") + Decimal(idx * 20000),
+                is_valid=True,
+            )
+        response = self.client.get(reverse("auction_updates_feed", kwargs={"slug": self.tournament.slug}))
+        snapshot = response.json()["snapshot"]
+        self.assertEqual(len(snapshot["leaderboard"]), 10)
+        self.assertTrue(snapshot["current_lot"]["bidding_war"])
+        self.assertEqual(snapshot["current_lot"]["bidder_count"], 2)
+
+    def test_anonymous_audience_prediction_and_reaction_do_not_create_bids(self):
+        team = self.create_team("Fan Pick XI")
+        lot = self.create_lot("Fan Player", lot_no=1)
+        self.client.logout()
+        prediction = self.client.post(
+            reverse("auction_audience_action", kwargs={"slug": self.tournament.slug}),
+            data=json.dumps({"action": "PREDICT", "lot_id": lot.id, "team_id": team.id}),
+            content_type="application/json",
+        )
+        self.assertEqual(prediction.status_code, 200)
+        reaction = self.client.post(
+            reverse("auction_audience_action", kwargs={"slug": self.tournament.slug}),
+            data=json.dumps({"action": "REACT", "lot_id": lot.id, "reaction": "FIRE"}),
+            content_type="application/json",
+        )
+        self.assertEqual(reaction.status_code, 200)
+        self.assertEqual(Bid.objects.filter(lot=lot).count(), 0)

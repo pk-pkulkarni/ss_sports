@@ -1,1295 +1,156 @@
 {% extends "base.html" %}
 {% load static %}
-
 {% block title %}Auction Stage | {{ tournament.name }}{% endblock %}
 
 {% block head %}
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Manrope:wght@400;600;700;800&display=swap"
-          rel="stylesheet">
-    <style>
-        :root {
-            --stage-bg-1: #04101e;
-            --stage-bg-2: #0f172a;
-            --stage-line: rgba(255, 255, 255, .14);
-            --stage-soft: rgba(255, 255, 255, .06);
-            --stage-muted: rgba(241, 245, 249, .72);
-            --stage-gold: #fbbf24;
-            --stage-cyan: #38bdf8;
-            --stage-green: #22c55e;
-            --stage-red: #fb7185;
-        }
-
-        body {
-            background: radial-gradient(1000px 600px at 12% 10%, rgba(56, 189, 248, .20), transparent 55%),
-            radial-gradient(1200px 700px at 82% 8%, rgba(249, 115, 22, .16), transparent 58%),
-            linear-gradient(180deg, rgba(3, 7, 18, .92), rgba(5, 10, 20, .90)),
-            url("{% static 'img/stadium.jpg' %}") center / cover no-repeat fixed;
-            overflow-x: hidden;
-        }
-
-        .site-overlay {
-            background: linear-gradient(180deg, rgba(2, 6, 23, .90), rgba(2, 6, 23, .78)),
-            radial-gradient(circle at top, rgba(56, 189, 248, .10), transparent 45%);
-        }
-
-        main.container {
-            max-width: none;
-            width: 100%;
-            padding-left: 0;
-            padding-right: 0;
-            box-sizing: border-box;
-            overflow-x: hidden;
-        }
-
-        .stage-page {
-            position: relative;
-            display: grid;
-            gap: 12px;
-            min-width: 0;
-            overflow-x: hidden;
-        }
-
-        .stage-page::before {
-            content: "";
-            position: absolute;
-            inset: -40px 0 auto auto;
-            width: 420px;
-            height: 420px;
-            background: radial-gradient(circle, rgba(251, 191, 36, .12), transparent 65%);
-            pointer-events: none;
-            filter: blur(8px);
-        }
-
-        .stage-topbar,
-        .stage-shell,
-        .stage-sponsors {
-            border: 1px solid var(--stage-line);
-            background: linear-gradient(180deg, rgba(8, 15, 30, .90), rgba(6, 11, 23, .84));
-            box-shadow: 0 24px 80px rgba(0, 0, 0, .35);
-        }
-
-        .stage-topbar {
-            position: relative;
-            overflow: hidden;
-            border-radius: 22px;
-            min-height: 96px;
-            padding: 12px 18px;
-            display: block;
-        }
-
-        .stage-topbar::after {
-            content: "";
-            position: absolute;
-            inset: auto -80px -90px auto;
-            width: 280px;
-            height: 280px;
-            background: radial-gradient(circle, rgba(34, 197, 94, .20), transparent 62%);
-            pointer-events: none;
-        }
-
-        .eyebrow {
-            font-family: "Manrope", sans-serif;
-            letter-spacing: .18em;
-            text-transform: uppercase;
-            color: var(--stage-muted);
-            font-size: .76rem;
-            font-weight: 800;
-        }
-
-        .stage-heading {
-            padding-right: 520px;
-        }
-
-        .stage-title {
-            margin: 0;
-            font-family: "Bebas Neue", sans-serif;
-            font-size: 3.65rem;
-            line-height: .88;
-            letter-spacing: 0;
-        }
-
-        .stage-sub {
-            font-family: "Manrope", sans-serif;
-            color: rgba(241, 245, 249, .84);
-            font-size: .9rem;
-            margin-top: 2px;
-        }
-
-        .stage-chips {
-            display: flex;
-            flex-wrap: nowrap;
-            justify-content: flex-start;
-            gap: 8px;
-            min-width: 0;
-        }
-
-        .stage-right {
-            position: absolute;
-            top: 14px;
-            right: 18px;
-            z-index: 5;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            min-width: 0;
-            flex-wrap: nowrap;
-        }
-
-        .stage-chip {
-            display: inline-flex;
-            align-items: center;
-            gap: .45rem;
-            border-radius: 999px;
-            border: 1px solid var(--stage-line);
-            padding: .36rem .68rem;
-            background: rgba(255, 255, 255, .05);
-            font-family: "Manrope", sans-serif;
-            font-size: .8rem;
-            font-weight: 800;
-            color: rgba(241, 245, 249, .94);
-            white-space: nowrap;
-        }
-
-        .stage-chip strong {
-            color: #fff;
-        }
-
-        .status-live {
-            border-color: rgba(34, 197, 94, .42);
-            background: rgba(34, 197, 94, .14);
-            color: #bbf7d0;
-        }
-
-        .status-ended {
-            border-color: rgba(251, 191, 36, .35);
-            background: rgba(251, 191, 36, .12);
-            color: #fde68a;
-        }
-
-        .top-actions {
-            display: flex;
-            flex-wrap: nowrap;
-            justify-content: flex-end;
-            gap: 8px;
-        }
-
-        .stage-btn {
-            border: 1px solid rgba(255, 255, 255, .18);
-            background: rgba(255, 255, 255, .06);
-            color: rgba(241, 245, 249, .94);
-            font-family: "Manrope", sans-serif;
-            font-weight: 800;
-            border-radius: 12px;
-            padding: .48rem .78rem;
-            text-decoration: none;
-            white-space: nowrap;
-        }
-
-        .stage-btn:hover {
-            background: rgba(255, 255, 255, .10);
-            color: #fff;
-        }
-
-        .stage-btn.primary {
-            border: 0;
-            color: #06111f;
-            background: linear-gradient(90deg, #fbbf24, #38bdf8);
-        }
-
-        .stage-shell {
-            position: relative;
-            overflow: hidden;
-            border-radius: 32px;
-            padding: 16px;
-            background-size: cover;
-            background-position: center;
-        }
-
-        .stage-shell::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(120deg, rgba(2, 6, 23, .96), rgba(2, 6, 23, .76)),
-            radial-gradient(circle at 18% 20%, rgba(56, 189, 248, .18), transparent 35%);
-            pointer-events: none;
-        }
-
-        .stage-shell > * {
-            position: relative;
-            z-index: 1;
-        }
-
-        .stage-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 14px;
-            min-width: 0;
-        }
-
-        .stack {
-            display: grid;
-            gap: 14px;
-            min-width: 0;
-        }
-
-        .current-lot {
-            display: grid;
-            grid-template-columns: minmax(160px, 260px) minmax(0, 1fr);
-            gap: 16px;
-            align-items: start;
-            min-width: 0;
-        }
-
-        .current-lot > div {
-            min-width: 0;
-        }
-
-        .photo-shell {
-            min-height: 258px;
-            border-radius: 24px;
-            overflow: hidden;
-            background: linear-gradient(180deg, rgba(15, 23, 42, .92), rgba(15, 23, 42, .76)),
-            radial-gradient(circle at top, rgba(56, 189, 248, .15), transparent 50%);
-            border: 1px solid rgba(255, 255, 255, .12);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-        }
-
-        .photo-shell img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .photo-fallback {
-            font-family: "Bebas Neue", sans-serif;
-            font-size: 2rem;
-            letter-spacing: .08em;
-            color: rgba(255, 255, 255, .55);
-        }
-
-        .lot-kicker {
-            display: inline-flex;
-            align-items: center;
-            gap: .6rem;
-            border-radius: 999px;
-            border: 1px solid rgba(251, 191, 36, .30);
-            background: rgba(251, 191, 36, .12);
-            padding: .4rem .72rem;
-            font-family: "Manrope", sans-serif;
-            font-size: .8rem;
-            font-weight: 800;
-            color: #fde68a;
-        }
-
-        .player-name {
-            margin: 9px 0 0;
-            font-family: "Bebas Neue", sans-serif;
-            font-size: 3.65rem;
-            line-height: .9;
-            letter-spacing: 0;
-            overflow-wrap: anywhere;
-        }
-
-        .player-meta {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 9px;
-        }
-
-        .meta-pill {
-            display: inline-flex;
-            align-items: center;
-            padding: .36rem .68rem;
-            border-radius: 999px;
-            border: 1px solid rgba(255, 255, 255, .12);
-            background: rgba(255, 255, 255, .06);
-            font-family: "Manrope", sans-serif;
-            font-size: .82rem;
-            font-weight: 700;
-            color: rgba(241, 245, 249, .92);
-        }
-
-        .bid-board {
-            margin-top: 12px;
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 10px;
-            min-width: 0;
-        }
-
-        .status-card {
-            grid-column: auto;
-        }
-
-        .score-card {
-            border: 1px solid rgba(255, 255, 255, .12);
-            border-radius: 18px;
-            background: rgba(255, 255, 255, .06);
-            padding: 12px;
-            min-height: 102px;
-            min-width: 0;
-            overflow: hidden;
-        }
-
-        .score-label {
-            font-family: "Manrope", sans-serif;
-            text-transform: uppercase;
-            letter-spacing: .14em;
-            font-size: .7rem;
-            color: var(--stage-muted);
-            font-weight: 800;
-        }
-
-        .score-value {
-            font-family: "Bebas Neue", sans-serif;
-            font-size: 2.62rem;
-            line-height: .92;
-            margin-top: 8px;
-            letter-spacing: 0;
-            overflow-wrap: anywhere;
-        }
-
-        .score-value.amount-value {
-            white-space: nowrap;
-            font-size: 2.62rem;
-        }
-
-        .score-value.status-value {
-            font-size: 2.18rem;
-        }
-
-        .score-sub {
-            font-family: "Manrope", sans-serif;
-            font-size: .8rem;
-            color: rgba(241, 245, 249, .82);
-            margin-top: 6px;
-            overflow-wrap: anywhere;
-        }
-
-        #leadingTeamValue,
-        #appearanceValue {
-            word-break: break-word;
-        }
-
-        .leader-card {
-            background: linear-gradient(135deg, rgba(34, 197, 94, .16), rgba(56, 189, 248, .12));
-        }
-
-        .spotlight-card,
-        .events-card,
-        .board-card {
-            border: 1px solid rgba(255, 255, 255, .12);
-            border-radius: 22px;
-            background: rgba(255, 255, 255, .05);
-            padding: 14px;
-        }
-
-        .stage-focus-row {
-            display: grid;
-            grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr);
-            gap: 14px;
-            align-items: start;
-            margin-top: 14px;
-            min-width: 0;
-        }
-
-        .section-title {
-            margin: 0;
-            font-family: "Bebas Neue", sans-serif;
-            font-size: 1.7rem;
-            letter-spacing: .06em;
-        }
-
-        .section-sub {
-            font-family: "Manrope", sans-serif;
-            color: var(--stage-muted);
-            font-size: .82rem;
-            margin-top: 2px;
-        }
-
-        .spotlight-sale {
-            margin-top: 10px;
-            border-radius: 18px;
-            padding: 12px;
-            background: linear-gradient(145deg, rgba(15, 23, 42, .92), rgba(15, 23, 42, .72));
-            border: 1px solid rgba(255, 255, 255, .10);
-        }
-
-        .sale-label {
-            font-family: "Manrope", sans-serif;
-            text-transform: uppercase;
-            letter-spacing: .16em;
-            font-size: .76rem;
-            font-weight: 800;
-            color: #bbf7d0;
-        }
-
-        .sale-player {
-            margin-top: 7px;
-            font-family: "Bebas Neue", sans-serif;
-            font-size: clamp(2rem, 3.2vw, 3.1rem);
-            line-height: .9;
-            letter-spacing: .04em;
-        }
-
-        .sale-team {
-            margin-top: 4px;
-            font-family: "Manrope", sans-serif;
-            font-size: .96rem;
-            font-weight: 800;
-            color: rgba(241, 245, 249, .94);
-        }
-
-        .sale-price {
-            margin-top: 8px;
-            font-family: "Bebas Neue", sans-serif;
-            font-size: clamp(2.2rem, 3.4vw, 3.3rem);
-            color: #fde68a;
-            line-height: .92;
-            letter-spacing: .05em;
-            overflow-wrap: anywhere;
-        }
-
-        .highest-sold {
-            margin-top: 9px;
-            padding-top: 9px;
-            border-top: 1px solid rgba(255, 255, 255, .10);
-            font-family: "Manrope", sans-serif;
-        }
-
-        .highest-sold strong {
-            color: #fff;
-        }
-
-        .board-grid {
-            margin-top: 16px;
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 12px;
-            min-width: 0;
-        }
-
-        .team-tile {
-            border-radius: 22px;
-            border: 1px solid rgba(255, 255, 255, .10);
-            padding: 14px;
-            background: linear-gradient(145deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .03));
-            min-height: 140px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .team-tile::before {
-            content: "";
-            position: absolute;
-            inset: auto -40px -60px auto;
-            width: 170px;
-            height: 170px;
-            background: radial-gradient(circle, rgba(255, 255, 255, .12), transparent 62%);
-            pointer-events: none;
-        }
-
-        .team-head {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-        }
-
-        .team-name {
-            font-family: "Bebas Neue", sans-serif;
-            font-size: 2rem;
-            line-height: .95;
-            letter-spacing: .05em;
-            margin: 0;
-            overflow-wrap: anywhere;
-        }
-
-        .team-short {
-            font-family: "Manrope", sans-serif;
-            font-size: .82rem;
-            font-weight: 800;
-            letter-spacing: .12em;
-            text-transform: uppercase;
-            color: rgba(241, 245, 249, .75);
-        }
-
-        .team-stat-row {
-            margin-top: 12px;
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 10px;
-        }
-
-        .team-stat {
-            border-radius: 16px;
-            background: rgba(2, 6, 23, .22);
-            border: 1px solid rgba(255, 255, 255, .08);
-            padding: 10px;
-        }
-
-        .team-stat .label {
-            font-family: "Manrope", sans-serif;
-            text-transform: uppercase;
-            letter-spacing: .10em;
-            font-size: .68rem;
-            color: rgba(241, 245, 249, .65);
-            font-weight: 800;
-        }
-
-        .team-stat .value {
-            margin-top: 6px;
-            font-family: "Bebas Neue", sans-serif;
-            font-size: 1.5rem;
-            line-height: .9;
-            white-space: nowrap;
-        }
-
-        .team-last-buy {
-            margin-top: 12px;
-            font-family: "Manrope", sans-serif;
-            font-size: .88rem;
-            color: rgba(241, 245, 249, .86);
-        }
-
-        .events-list {
-            margin-top: 10px;
-            display: grid;
-            gap: 8px;
-            max-height: 212px;
-            overflow: hidden;
-        }
-
-        .event-row {
-            border-radius: 14px;
-            border: 1px solid rgba(255, 255, 255, .10);
-            background: rgba(255, 255, 255, .05);
-            padding: 9px 11px;
-        }
-
-        .event-row.level-sold {
-            background: rgba(34, 197, 94, .14);
-            border-color: rgba(34, 197, 94, .26);
-        }
-
-        .event-row.level-bid {
-            background: rgba(56, 189, 248, .10);
-            border-color: rgba(56, 189, 248, .22);
-        }
-
-        .event-row.level-milestone {
-            background: rgba(251, 191, 36, .12);
-            border-color: rgba(251, 191, 36, .22);
-        }
-
-        .event-main {
-            font-family: "Manrope", sans-serif;
-            font-size: .88rem;
-            font-weight: 700;
-            color: rgba(248, 250, 252, .94);
-        }
-
-        .event-meta {
-            margin-top: 4px;
-            font-family: "Manrope", sans-serif;
-            font-size: .72rem;
-            color: rgba(241, 245, 249, .64);
-            letter-spacing: .05em;
-            text-transform: uppercase;
-        }
-
-        .stage-live-strip {
-            border: 1px solid var(--stage-line);
-            background: linear-gradient(180deg, rgba(8, 15, 30, .90), rgba(6, 11, 23, .84));
-            box-shadow: 0 24px 80px rgba(0, 0, 0, .28);
-            border-radius: 16px;
-            padding: 6px 10px;
-        }
-
-        .stage-sponsors {
-            border-radius: 26px;
-            padding: 18px;
-            display: grid;
-            grid-template-columns: minmax(0, .95fr) minmax(0, 1.2fr);
-            gap: 14px;
-            align-items: stretch;
-        }
-
-        .sponsor-card {
-            border: 1px solid rgba(255, 255, 255, .10);
-            border-radius: 22px;
-            min-height: 116px;
-            padding: 16px;
-            background: rgba(255, 255, 255, .05);
-            position: relative;
-            overflow: hidden;
-            min-width: 0;
-        }
-
-        .sponsor-card.banner {
-            background-size: cover;
-            background-position: center;
-        }
-
-        .sponsor-card.banner::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(120deg, rgba(2, 6, 23, .90), rgba(2, 6, 23, .46));
-        }
-
-        .sponsor-card > * {
-            position: relative;
-            z-index: 1;
-        }
-
-        .sponsor-label {
-            font-family: "Manrope", sans-serif;
-            text-transform: uppercase;
-            letter-spacing: .16em;
-            font-size: .74rem;
-            font-weight: 800;
-            color: var(--stage-muted);
-        }
-
-        .sponsor-value {
-            margin-top: 8px;
-            font-family: "Bebas Neue", sans-serif;
-            font-size: 2.2rem;
-            line-height: .95;
-            letter-spacing: .05em;
-        }
-
-        .tracker-card {
-            display: grid;
-            gap: 12px;
-        }
-
-        .tracker-strip {
-            border-radius: 12px;
-            overflow: hidden;
-            position: relative;
-            min-height: 38px;
-            display: flex;
-            align-items: center;
-            border: 1px solid rgba(255, 255, 255, .10);
-            background: linear-gradient(145deg, rgba(12, 24, 45, .84), rgba(8, 16, 30, .82));
-        }
-
-        .tracker-label {
-            flex: 0 0 auto;
-            align-self: stretch;
-            display: flex;
-            align-items: center;
-            padding: 0 12px;
-            background: linear-gradient(90deg, rgba(251, 191, 36, .95), rgba(249, 115, 22, .95));
-            color: #06111f;
-            font-family: "Manrope", sans-serif;
-            font-size: .72rem;
-            font-weight: 900;
-            letter-spacing: .16em;
-            text-transform: uppercase;
-        }
-
-        .ticker-track-wrap {
-            position: relative;
-            overflow: hidden;
-            width: 100%;
-            min-width: 0;
-        }
-
-        .ticker-track {
-            white-space: nowrap;
-            display: inline-block;
-            min-width: 100%;
-            padding-left: 100%;
-            animation: tickerMove 34s linear infinite;
-            font-family: "Manrope", sans-serif;
-            font-size: .82rem;
-            font-weight: 700;
-            color: rgba(248, 250, 252, .94);
-        }
-
-        @keyframes tickerMove {
-            0% {
-                transform: translateX(0);
-            }
-            100% {
-                transform: translateX(-100%);
-            }
-        }
-
-        .sale-flash {
-            position: fixed;
-            inset: 24px;
-            border-radius: 32px;
-            padding: 28px;
-            display: none;
-            align-items: center;
-            justify-content: space-between;
-            gap: 24px;
-            border: 1px solid rgba(255, 255, 255, .16);
-            box-shadow: 0 30px 120px rgba(0, 0, 0, .44);
-            z-index: 20;
-            backdrop-filter: blur(10px);
-        }
-
-        .sale-flash.show {
-            display: flex;
-            animation: saleBurst 3.2s ease both;
-        }
-
-        .sale-flash-copy {
-            max-width: 70%;
-        }
-
-        .sale-flash-tag {
-            font-family: "Manrope", sans-serif;
-            text-transform: uppercase;
-            letter-spacing: .18em;
-            font-size: .78rem;
-            font-weight: 900;
-            color: rgba(255, 255, 255, .86);
-        }
-
-        .sale-flash-player {
-            margin-top: 10px;
-            font-family: "Bebas Neue", sans-serif;
-            font-size: clamp(3rem, 7vw, 7rem);
-            line-height: .88;
-            letter-spacing: .04em;
-        }
-
-        .sale-flash-meta {
-            margin-top: 8px;
-            font-family: "Manrope", sans-serif;
-            font-size: 1.1rem;
-            font-weight: 800;
-            color: rgba(255, 255, 255, .92);
-        }
-
-        .sale-flash-price {
-            font-family: "Bebas Neue", sans-serif;
-            font-size: clamp(4rem, 8vw, 7rem);
-            color: #fff5c2;
-            letter-spacing: .05em;
-            line-height: .88;
-        }
-
-        @keyframes saleBurst {
-            0% {
-                opacity: 0;
-                transform: scale(.96);
-            }
-            12% {
-                opacity: 1;
-                transform: scale(1);
-            }
-            84% {
-                opacity: 1;
-                transform: scale(1);
-            }
-            100% {
-                opacity: 0;
-                transform: scale(1.02);
-            }
-        }
-
-        @media (max-width: 1200px) {
-            .stage-grid,
-            .current-lot,
-            .stage-focus-row,
-            .stage-sponsors {
-                grid-template-columns: 1fr;
-            }
-
-            .bid-board,
-            .board-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .stage-right {
-                width: 100%;
-                position: static;
-                justify-content: flex-start;
-                flex-wrap: wrap;
-                margin-top: 10px;
-            }
-
-            .stage-heading {
-                padding-right: 0;
-            }
-
-            .stage-chips,
-            .top-actions {
-                justify-content: flex-start;
-            }
-
-            .sale-flash {
-                inset: 12px;
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            .sale-flash-copy {
-                max-width: none;
-            }
-        }
-
-    </style>
+<style>
+  :root { --stage-gold:#fbbf24; --stage-cyan:#38bdf8; --stage-green:#22c55e; --stage-red:#fb7185; }
+  html, body { height:100%; overflow:hidden; }
+  body { background:#020817; }
+  .site-overlay { height:100dvh; min-height:0; overflow:hidden; background:radial-gradient(circle at 18% 8%,rgba(56,189,248,.16),transparent 34%),radial-gradient(circle at 82% 90%,rgba(168,85,247,.14),transparent 35%),#020817; }
+  main.container { width:100%; height:100dvh; max-width:none!important; padding:clamp(8px,1.2vh,14px)!important; }
+  .stage { height:100%; display:grid; grid-template-rows:auto minmax(0,1fr) auto; gap:clamp(7px,1vh,12px); color:#f8fafc; font-family:Poppins,system-ui,sans-serif; }
+  .glass { border:1px solid rgba(255,255,255,.14); background:linear-gradient(145deg,rgba(15,23,42,.94),rgba(6,14,29,.92)); box-shadow:0 18px 55px rgba(0,0,0,.34); }
+  .stage-head { min-height:58px; border-radius:18px; padding:8px 13px; display:flex; align-items:center; justify-content:space-between; gap:14px; }
+  .eyebrow { color:var(--stage-cyan); font-weight:900; text-transform:uppercase; letter-spacing:.14em; font-size:clamp(.62rem,1vw,.78rem); }
+  .stage-title { margin:1px 0 0; font-size:clamp(1.05rem,2vw,1.65rem); font-weight:950; line-height:1.05; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:45vw; }
+  .head-metrics,.head-actions { display:flex; align-items:center; gap:7px; }
+  .auction-banner { max-width:150px; max-height:42px; object-fit:contain; border-radius:9px; }
+  .metric { min-width:68px; padding:5px 9px; border-radius:12px; background:rgba(255,255,255,.055); border:1px solid rgba(255,255,255,.1); text-align:center; }
+  .metric span { display:block; color:#94a3b8; font-size:.58rem; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
+  .metric strong { font-size:.9rem; }
+  .stage-btn { min-height:34px!important; padding:5px 9px; border:1px solid rgba(255,255,255,.16); border-radius:10px; color:#e2e8f0; background:rgba(255,255,255,.06); font-size:.7rem; font-weight:850; }
+  .stage-btn:hover { color:white; background:rgba(255,255,255,.12); }
+  .health { display:flex; align-items:center; gap:6px; color:#cbd5e1; font-size:.7rem; font-weight:800; }
+  .health-dot { width:8px; height:8px; border-radius:50%; background:var(--stage-green); box-shadow:0 0 0 4px rgba(34,197,94,.14); }
+  .health.stale .health-dot { background:var(--stage-gold); box-shadow:0 0 0 4px rgba(251,191,36,.14); }
+  .health.offline .health-dot { background:var(--stage-red); box-shadow:0 0 0 4px rgba(251,113,133,.14); }
+  .stage-main { min-height:0; display:grid; grid-template-columns:minmax(0,1.62fr) minmax(330px,.88fr); gap:clamp(7px,1vw,12px); }
+  .spotlight { min-height:0; border-radius:22px; padding:clamp(10px,1.4vw,18px); position:relative; overflow:hidden; display:grid; grid-template-rows:auto minmax(0,1fr) auto; }
+  .spotlight:before { content:""; position:absolute; inset:-30% -15% auto 45%; height:85%; background:radial-gradient(circle, color-mix(in srgb,var(--team-accent,var(--stage-cyan)) 30%,transparent), transparent 68%); pointer-events:none; }
+  .lot-line { position:relative; display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .lot-chip,.war-chip { border-radius:999px; padding:5px 10px; font-size:.68rem; font-weight:900; letter-spacing:.06em; text-transform:uppercase; border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.06); }
+  .war-chip { display:none; color:#fee2e2; border-color:rgba(251,113,133,.5); background:rgba(225,29,72,.19); animation:pulseWar .8s ease-in-out infinite alternate; }
+  .war-chip.show { display:inline-flex; }
+  @keyframes pulseWar { to { transform:scale(1.035); box-shadow:0 0 25px rgba(251,113,133,.25); } }
+  .player-zone { min-height:0; display:grid; grid-template-columns:minmax(180px,34%) minmax(0,1fr); align-items:center; gap:clamp(12px,2vw,28px); position:relative; }
+  .player-photo { width:min(100%,36vh); aspect-ratio:1/1; margin:auto; border-radius:clamp(22px,3vw,38px); overflow:hidden; background:linear-gradient(145deg,#1e293b,#0f172a); border:2px solid rgba(255,255,255,.18); box-shadow:0 24px 70px rgba(0,0,0,.48); }
+  .player-photo img { width:100%; height:100%; object-fit:cover; }
+  .player-name { margin:0; font-size:clamp(2rem,4.7vw,5.2rem); font-weight:950; line-height:.96; letter-spacing:-.035em; overflow-wrap:anywhere; text-shadow:0 12px 42px rgba(0,0,0,.5); }
+  .player-meta { display:flex; flex-wrap:wrap; gap:7px; margin-top:12px; }
+  .meta-pill { border-radius:999px; padding:5px 10px; background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.13); color:#dbeafe; font-size:clamp(.65rem,.9vw,.82rem); font-weight:800; }
+  .stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; margin-top:12px; }
+  .stat { padding:7px 9px; border-radius:12px; background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.08); }
+  .stat span { display:block; color:#94a3b8; font-size:.58rem; font-weight:800; text-transform:uppercase; }
+  .stat strong { display:block; margin-top:1px; font-size:clamp(.75rem,1.2vw,1rem); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bid-board { position:relative; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:14px; align-items:end; border-radius:17px; padding:9px 12px; background:linear-gradient(90deg,rgba(2,6,23,.82),rgba(15,23,42,.64)); border:1px solid rgba(255,255,255,.12); }
+  .bid-label { color:#94a3b8; text-transform:uppercase; letter-spacing:.12em; font-size:.62rem; font-weight:900; }
+  .bid-price { font-size:clamp(2.25rem,5.5vw,5.8rem); font-weight:950; line-height:.94; letter-spacing:-.04em; color:#f8fafc; font-variant-numeric:tabular-nums; }
+  .leader { display:flex; align-items:center; justify-content:flex-end; gap:9px; min-width:190px; }
+  .leader-logo { width:clamp(42px,5vw,68px); height:clamp(42px,5vw,68px); border-radius:16px; object-fit:contain; background:white; padding:4px; display:none; }
+  .leader-copy { text-align:right; }
+  .leader-copy span { display:block; color:#94a3b8; font-size:.6rem; text-transform:uppercase; font-weight:850; }
+  .leader-copy strong { display:block; max-width:24vw; font-size:clamp(.85rem,1.55vw,1.3rem); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .rail { min-height:0; display:grid; grid-template-rows:auto auto minmax(0,1fr); gap:7px; }
+  .rail-card { border-radius:18px; padding:10px; min-height:0; overflow:hidden; }
+  .section-title { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; font-size:.68rem; font-weight:950; text-transform:uppercase; letter-spacing:.1em; color:#cbd5e1; }
+  .battle { display:grid; grid-template-columns:1fr auto 1fr; gap:7px; align-items:center; min-height:54px; }
+  .battle-side { min-width:0; display:flex; align-items:center; gap:7px; }
+  .battle-side:last-child { flex-direction:row-reverse; text-align:right; }
+  .battle-logo { width:35px; height:35px; object-fit:contain; border-radius:10px; background:white; padding:3px; }
+  .battle-name { min-width:0; }
+  .battle-name strong,.battle-name span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .battle-name strong { font-size:.74rem; } .battle-name span { color:#94a3b8; font-size:.65rem; }
+  .versus { color:var(--stage-gold); font-size:.66rem; font-weight:950; }
+  .stories { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+  .story { min-width:0; padding:7px; border-radius:11px; background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.08); }
+  .story span { display:block; color:#94a3b8; font-size:.52rem; text-transform:uppercase; font-weight:800; }
+  .story strong { display:block; margin-top:2px; font-size:.67rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .team-grid { min-height:0; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-auto-rows:minmax(42px,1fr); gap:5px; }
+  .team-tile { min-width:0; border-radius:11px; padding:5px 7px; display:grid; grid-template-columns:30px minmax(0,1fr) auto; align-items:center; gap:6px; background:linear-gradient(110deg,color-mix(in srgb,var(--primary) 55%,#0f172a),rgba(15,23,42,.82)); border:1px solid color-mix(in srgb,var(--accent) 45%,rgba(255,255,255,.1)); }
+  .team-tile.leading { box-shadow:inset 3px 0 var(--accent),0 0 22px color-mix(in srgb,var(--accent) 24%,transparent); }
+  .team-tile img { width:28px; height:28px; object-fit:contain; border-radius:8px; background:white; padding:2px; }
+  .team-main { min-width:0; }
+  .team-main strong { display:block; font-size:.64rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .team-main span { display:block; color:#cbd5e1; font-size:.55rem; white-space:nowrap; }
+  .team-count { text-align:right; } .team-count strong { display:block; font-size:.72rem; } .team-count span { color:#94a3b8; font-size:.5rem; }
+  .ticker { min-height:38px; border-radius:14px; display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:10px; padding:5px 10px; overflow:hidden; }
+  .ticker-live { color:#fecaca; background:rgba(225,29,72,.18); border:1px solid rgba(251,113,133,.35); border-radius:999px; padding:4px 8px; font-size:.6rem; font-weight:950; letter-spacing:.1em; }
+  .ticker-window { min-width:0; overflow:hidden; }
+  .ticker-track { white-space:nowrap; font-size:.72rem; font-weight:750; animation:ticker 35s linear infinite; width:max-content; }
+  @keyframes ticker { from{transform:translateX(70vw)} to{transform:translateX(-100%)} }
+  .sponsor { color:#64748b; font-size:.56rem; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
+  .show-overlay,.sold-overlay,.qr-overlay { position:fixed; inset:0; z-index:1050; display:none; align-items:center; justify-content:center; padding:4vh 4vw; background:rgba(2,6,23,.84); backdrop-filter:blur(12px); }
+  .show-overlay.show,.sold-overlay.show,.qr-overlay.show { display:flex; }
+  .show-card { width:min(850px,88vw); padding:clamp(20px,4vw,48px); border-radius:32px; text-align:center; border:1px solid rgba(255,255,255,.17); background:radial-gradient(circle at 50% 0,rgba(56,189,248,.2),transparent 45%),#07101f; box-shadow:0 35px 100px rgba(0,0,0,.6); }
+  .show-kicker { color:var(--stage-gold); font-weight:950; letter-spacing:.15em; text-transform:uppercase; }
+  .show-title { font-size:clamp(2.2rem,7vw,6.5rem); line-height:.98; font-weight:950; margin:10px 0; }
+  .reveal-detail { display:none; grid-template-columns:120px minmax(0,1fr); align-items:center; gap:18px; max-width:620px; margin:18px auto 0; text-align:left; }
+  .reveal-detail.show { display:grid; }
+  .reveal-detail img { width:120px; height:120px; object-fit:cover; border-radius:22px; border:1px solid rgba(255,255,255,.2); }
+  .reveal-meta { display:flex; flex-wrap:wrap; gap:7px; }
+  .countdown { font-size:clamp(5rem,18vw,14rem); line-height:.82; font-weight:950; font-variant-numeric:tabular-nums; color:var(--stage-gold); }
+  .sold-card { width:min(940px,90vw); aspect-ratio:16/9; border-radius:32px; overflow:hidden; display:grid; grid-template-columns:42% 58%; position:relative; background:linear-gradient(140deg,var(--sold-primary,#0f172a),#020617); border:2px solid var(--sold-accent,#fbbf24); box-shadow:0 40px 120px rgba(0,0,0,.72); }
+  .sold-photo { width:100%; height:100%; object-fit:cover; background:#172033; }
+  .sold-info { padding:6%; display:flex; flex-direction:column; justify-content:center; min-width:0; }
+  .sold-word { color:var(--sold-accent); font-size:clamp(1rem,2.5vw,2rem); font-weight:950; letter-spacing:.18em; }
+  .sold-player { font-size:clamp(2rem,5vw,5rem); line-height:.95; font-weight:950; overflow-wrap:anywhere; }
+  .sold-team { margin-top:12px; font-size:clamp(1rem,2vw,1.7rem); font-weight:850; }
+  .sold-team-logo { width:64px; height:64px; object-fit:contain; background:white; border-radius:15px; padding:5px; margin-top:12px; display:none; }
+  .sold-price { margin-top:7px; font-size:clamp(2rem,5vw,4.8rem); font-weight:950; color:var(--stage-gold); }
+  .sold-tier { position:absolute; top:16px; right:16px; border-radius:999px; padding:7px 12px; background:rgba(2,6,23,.72); font-size:.7rem; font-weight:900; text-transform:uppercase; }
+  .overlay-actions { position:absolute; right:18px; bottom:18px; display:flex; gap:7px; }
+  .qr-box { background:white; color:#07101f; padding:20px; border-radius:22px; text-align:center; }
+  #qrCode { width:220px; height:220px; margin:auto; }
+  .empty { height:100%; display:grid; place-items:center; text-align:center; color:#94a3b8; }
+  .reduced-motion * { animation:none!important; transition:none!important; }
+  @media (prefers-reduced-motion:reduce){ *{animation-duration:.01ms!important; animation-iteration-count:1!important;} }
+  @media (max-width:900px),(max-height:610px) { .stage-main{grid-template-columns:minmax(0,1.5fr) minmax(280px,.8fr)} .head-metrics .metric:nth-child(n+3),.stories .story:nth-child(3){display:none} .stage-title{max-width:34vw} .player-zone{grid-template-columns:minmax(140px,30%) 1fr} .stats{display:none} }
+</style>
 {% endblock %}
 
 {% block content %}
-    <div class="stage-page">
-        <div class="stage-topbar">
-            <div class="stage-heading">
-                <div class="eyebrow">{{ tournament.season_year }} Auction Stage</div>
-                <h1 class="stage-title">{{ tournament.name }}</h1>
-                <div class="stage-sub">
-                    {% if tournament.city %}{{ tournament.city }}{% endif %}
-                    {% if tournament.venue %}{% if tournament.city %} | {% endif %}{{ tournament.venue }}{% endif %}
-                </div>
-            </div>
-            <div class="stage-right">
-                <div class="stage-chips">
-                    <span id="statusChip" class="stage-chip status-live">Status <strong>{% if snapshot %}
-                        {{ snapshot.status_display }}{% elif auction %}{{ auction.get_status_display }}{% else %}No
-                        Auction{% endif %}</strong></span>
-                    <span class="stage-chip">Sold <strong id="soldCountChip">{% if snapshot %}
-                        {{ snapshot.sold_total }}{% else %}0{% endif %}</strong></span>
-                    <span class="stage-chip">Remaining <strong id="remainingCountChip">{% if snapshot %}
-                        {{ snapshot.unsold_total }}{% else %}0{% endif %}</strong></span>
-                </div>
-                <div class="top-actions">
-                    <button type="button" class="stage-btn primary" id="enterFullscreen">Fullscreen</button>
-                </div>
-            </div>
-        </div>
-
-        {% if not auction %}
-            <div class="stage-live-strip">
-                <div class="tracker-strip">
-                    <div class="tracker-label">Live</div>
-                    <div class="ticker-track-wrap">
-                        <div class="ticker-track">Stage feed will appear here once the auction starts.</div>
-                    </div>
-                </div>
-            </div>
-            <div class="stage-shell">
-                <div class="spotlight-card">
-                    <div class="section-title">No Auction Found</div>
-                    <div class="section-sub">Create auction lots first, then the stage screen will go live here.</div>
-                </div>
-            </div>
-        {% else %}
-            <div class="stage-live-strip">
-                <div class="tracker-strip">
-                    <div class="tracker-label">Live</div>
-                    <div class="ticker-track-wrap">
-                        <div id="tickerTrack" class="ticker-track">Stage feed loading...</div>
-                    </div>
-                </div>
-            </div>
-            <div id="stageShell" class="stage-shell"{% if snapshot and snapshot.banner %}
-                 style="background-image:url('{{ snapshot.banner }}');"{% endif %}>
-                <div class="stage-grid">
-                    <div class="stack">
-                        <div class="current-lot">
-                            <div class="photo-shell" id="playerPhotoShell">
-                                <div class="photo-fallback">Awaiting Lot</div>
-                            </div>
-                            <div>
-                                <div id="lotKicker" class="lot-kicker">Awaiting live lot</div>
-                                <h2 id="playerName" class="player-name">Auction Stage Ready</h2>
-                                <div id="playerMeta" class="player-meta"></div>
-
-                                <div class="bid-board">
-                                    <div class="score-card">
-                                        <div class="score-label">Base Price</div>
-                                        <div id="basePriceValue" class="score-value amount-value">&mdash;</div>
-                                        <div id="basePriceSub" class="score-sub">Opening bid line</div>
-                                    </div>
-                                    <div class="score-card leader-card">
-                                        <div class="score-label">Current Bid</div>
-                                        <div id="currentBidValue" class="score-value amount-value">&mdash;</div>
-                                        <div id="leadingTeamValue" class="score-sub">No bids yet</div>
-                                    </div>
-                                    <div class="score-card status-card">
-                                        <div class="score-label">Lot Status</div>
-                                        <div id="lotStatusValue" class="score-value status-value">&mdash;</div>
-                                        <div id="appearanceValue" class="score-sub">Waiting for auction flow</div>
-                                    </div>
-                                </div>
-
-                                <div class="stage-focus-row">
-                                    <div class="spotlight-card">
-                                        <div class="section-title">Sold Spotlight</div>
-                                        <div class="section-sub">Latest hammer result with the best buy still highlighted.</div>
-                                        <div id="latestSaleCard" class="spotlight-sale">
-                                            <div class="sale-label">No sale yet</div>
-                                            <div class="sale-player">Waiting for first sold player</div>
-                                            <div class="sale-team">Stage spotlight will update automatically.</div>
-                                            <div class="sale-price">&mdash;</div>
-                                        </div>
-                                        <div id="highestSoldWrap" class="highest-sold"></div>
-                                    </div>
-
-                                    <div class="events-card">
-                                        <div class="section-title">Recent Events</div>
-                                        <div class="section-sub">Fast event strip for emcee and audience context.</div>
-                                        <div id="recentEvents" class="events-list"></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="board-card">
-                            <div class="section-title">Team Board</div>
-                            <div class="section-sub">Live purse and squad view for the projector screen.</div>
-                            <div id="leaderboardGrid" class="board-grid"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="stage-sponsors">
-                <div class="sponsor-card">
-                    <div class="sponsor-label">Info Banner</div>
-                    <div class="sponsor-value">{{ tournament.venue|default:tournament.name }}</div>
-                    <div class="section-sub">
-                        {% if tournament.city %}{{ tournament.city }}{% else %}Live auction room{% endif %}
-                        {% if tournament.season_year %} | {{ tournament.season_year }}{% endif %}
-                    </div>
-                    <div class="section-sub" style="margin-top:10px;">Presented by SS Cricket</div>
-                </div>
-                <div id="bannerZone" class="sponsor-card banner"{% if snapshot and snapshot.banner %}
-                     style="background-image:url('{{ snapshot.banner }}');"{% endif %}>
-                    <div class="sponsor-label">Auction Banner</div>
-                    <div class="sponsor-value">{{ tournament.name }}</div>
-                    <div class="section-sub">Use the auction banner for projector-ready branding.</div>
-                </div>
-            </div>
-
-            <div id="saleFlash" class="sale-flash">
-                <div class="sale-flash-copy">
-                    <div class="sale-flash-tag">Sold</div>
-                    <div id="saleFlashPlayer" class="sale-flash-player"></div>
-                    <div id="saleFlashMeta" class="sale-flash-meta"></div>
-                </div>
-                <div id="saleFlashPrice" class="sale-flash-price"></div>
-            </div>
-
-            {{ snapshot|json_script:"stageSnapshotData" }}
-        {% endif %}
-    </div>
-{% endblock %}
-
-{% block scripts %}
-    {% if auction %}
-        <script>
-            (function () {
-                const shell = document.getElementById("stageShell");
-                const saleFlash = document.getElementById("saleFlash");
-                const saleFlashPlayer = document.getElementById("saleFlashPlayer");
-                const saleFlashMeta = document.getElementById("saleFlashMeta");
-                const saleFlashPrice = document.getElementById("saleFlashPrice");
-                const photoShell = document.getElementById("playerPhotoShell");
-                const lotKicker = document.getElementById("lotKicker");
-                const playerName = document.getElementById("playerName");
-                const playerMeta = document.getElementById("playerMeta");
-                const basePriceValue = document.getElementById("basePriceValue");
-                const basePriceSub = document.getElementById("basePriceSub");
-                const currentBidValue = document.getElementById("currentBidValue");
-                const leadingTeamValue = document.getElementById("leadingTeamValue");
-                const lotStatusValue = document.getElementById("lotStatusValue");
-                const appearanceValue = document.getElementById("appearanceValue");
-                const latestSaleCard = document.getElementById("latestSaleCard");
-                const highestSoldWrap = document.getElementById("highestSoldWrap");
-                const leaderboardGrid = document.getElementById("leaderboardGrid");
-                const recentEvents = document.getElementById("recentEvents");
-                const tickerTrack = document.getElementById("tickerTrack");
-                const soldCountChip = document.getElementById("soldCountChip");
-                const remainingCountChip = document.getElementById("remainingCountChip");
-                const statusChip = document.getElementById("statusChip");
-                const bannerZone = document.getElementById("bannerZone");
-                const fullBtn = document.getElementById("enterFullscreen");
-
-                const snapshotEl = document.getElementById("stageSnapshotData");
-                const initialSnapshot = snapshotEl ? JSON.parse(snapshotEl.textContent) : null;
-
-                let lastId = 0;
-                let latestSaleId = initialSnapshot && initialSnapshot.latest_sale ? initialSnapshot.latest_sale.id : null;
-                let recentEventItems = [];
-
-                function formatCompactAmount(amount) {
-                    const value = Number(amount || 0);
-                    if (!Number.isFinite(value) || value <= 0) return "-";
-
-                    const trim = (num) => {
-                        if (Number.isInteger(num)) return String(num);
-                        return num.toFixed(1).replace(/\.0$/, "");
-                    };
-
-                    if (value >= 10000000) return `₹ ${trim(value / 10000000)}Cr`;
-                    if (value >= 100000) return `₹ ${trim(value / 100000)}L`;
-                    if (value >= 1000) return `₹ ${trim(value / 1000)}K`;
-                    return `₹ ${Math.round(value).toLocaleString("en-IN")}`;
-                }
-
-                function badge(text) {
-                    const span = document.createElement("span");
-                    span.className = "meta-pill";
-                    span.textContent = text;
-                    return span;
-                }
-
-                function setStatusChip(snapshot) {
-                    if (!statusChip || !snapshot) return;
-                    statusChip.classList.toggle("status-ended", !!snapshot.auction_completed);
-                    statusChip.classList.toggle("status-live", !snapshot.auction_completed);
-                    statusChip.innerHTML = `Status <strong>${snapshot.status_display || "Live"}</strong>`;
-                }
-
-                function renderCurrentLot(currentLot, snapshot) {
-                    if (!currentLot) {
-                        photoShell.innerHTML = '<div class="photo-fallback">Awaiting Lot</div>';
-                        lotKicker.textContent = snapshot && snapshot.auction_completed ? "Auction completed" : "Awaiting live lot";
-                        playerName.textContent = snapshot && snapshot.auction_completed ? "Auction Closed" : "Auction Stage Ready";
-                        playerMeta.innerHTML = "";
-                        basePriceValue.textContent = "-";
-                        basePriceSub.textContent = "Opening bid line";
-                        currentBidValue.textContent = "-";
-                        leadingTeamValue.textContent = "No bids yet";
-                        lotStatusValue.textContent = snapshot && snapshot.status_display ? snapshot.status_display : "-";
-                        appearanceValue.textContent = snapshot && snapshot.auction_completed ? "All open lots completed" : "Waiting for auction flow";
-                        return;
-                    }
-
-                    if (currentLot.player && currentLot.player.photo) {
-                        photoShell.innerHTML = `<img src="${currentLot.player.photo}" alt="${currentLot.player.name}">`;
-                    } else {
-                        photoShell.innerHTML = `<div class="photo-fallback">${currentLot.player ? currentLot.player.name : "Awaiting Lot"}</div>`;
-                    }
-
-                    lotKicker.textContent = `Lot #${currentLot.lot_no} | Entry ${currentLot.appearance_no}`;
-                    playerName.textContent = currentLot.player ? currentLot.player.name : "Awaiting Player";
-
-                    playerMeta.innerHTML = "";
-                    const metaItems = [];
-                    if (currentLot.player && currentLot.player.role) metaItems.push(currentLot.player.role);
-                    if (currentLot.player && currentLot.player.city) metaItems.push(currentLot.player.city);
-                    if (currentLot.player && currentLot.player.age) metaItems.push(`${currentLot.player.age} yrs`);
-                    if (currentLot.player && currentLot.player.batting_style) metaItems.push(currentLot.player.batting_style);
-                    if (currentLot.player && currentLot.player.bowling_style) metaItems.push(currentLot.player.bowling_style);
-                    if (!metaItems.length) metaItems.push("Live player spotlight");
-                    metaItems.forEach((item) => playerMeta.appendChild(badge(item)));
-
-                    basePriceValue.textContent = formatCompactAmount(currentLot.base_price);
-                    basePriceSub.textContent = currentLot.base_price_display || "Opening bid line";
-                    currentBidValue.textContent = formatCompactAmount(currentLot.current_bid);
-                    if (currentLot.leading_team) {
-                        leadingTeamValue.textContent = `Leading: ${currentLot.leading_team.name} | ${currentLot.current_bid_display || "-"}`;
-                    } else {
-                        leadingTeamValue.textContent = currentLot.current_bid_display || "No bids yet";
-                    }
-                    lotStatusValue.textContent = (currentLot.status || "-").replaceAll("_", " ");
-                    appearanceValue.textContent = `Auction flow ${currentLot.appearance_no} of live sequence`;
-                }
-
-                function renderLatestSale(latestSale) {
-                    if (!latestSale) {
-                        latestSaleCard.style.background = "linear-gradient(145deg, rgba(15,23,42,.92), rgba(15,23,42,.72))";
-                        latestSaleCard.innerHTML = `
-          <div class="sale-label">No sale yet</div>
-          <div class="sale-player">Waiting for first sold player</div>
-          <div class="sale-team">Stage spotlight will update automatically.</div>
-          <div class="sale-price">&mdash;</div>
-        `;
-                        return;
-                    }
-
-                    latestSaleCard.style.background = `linear-gradient(140deg, ${latestSale.primary_color || "#0F172A"}, ${latestSale.secondary_color || "#22C55E"})`;
-                    latestSaleCard.innerHTML = `
-        <div class="sale-label">Latest Hammer | Lot ${latestSale.lot_no || "-"}</div>
-        <div class="sale-player">${latestSale.player || ""}</div>
-        <div class="sale-team">${latestSale.team || ""}</div>
-        <div class="sale-price">${formatCompactAmount(latestSale.price)}</div>
-      `;
-                }
-
-                function renderHighestSold(highestSold) {
-                    if (!highestSoldWrap) return;
-                    if (!highestSold) {
-                        highestSoldWrap.innerHTML = '<span class="section-sub">No highest sold marker yet.</span>';
-                        return;
-                    }
-
-                    highestSoldWrap.innerHTML = `
-        Highest sold so far: <strong>${highestSold.player}</strong>
-        to <strong>${highestSold.team || "TBD"}</strong>
-        for <strong>${highestSold.price_display || "-"}</strong>
-        in Lot ${highestSold.lot_no || "-"}.
-      `;
-                }
-
-                function renderLeaderboard(teams) {
-                    if (!leaderboardGrid) return;
-                    if (!teams || !teams.length) {
-                        leaderboardGrid.innerHTML = '<div class="section-sub">No active teams yet.</div>';
-                        return;
-                    }
-
-                    leaderboardGrid.innerHTML = teams.map((team) => {
-                        const lastBuy = team.last_buy
-                            ? `${team.last_buy.player} | ${formatCompactAmount(team.last_buy.price)}`
-                            : "No completed buy yet";
-                        const maxPlayers = team.max_players ? ` / ${team.max_players}` : "";
-                        const slotsRemaining = team.slots_remaining === "" ? "-" : team.slots_remaining;
-                        return `
-          <div class="team-tile" style="background:linear-gradient(145deg, ${team.primary_color || "#0F172A"}cc, ${team.secondary_color || "#22C55E"}88);">
-            <div class="team-head">
-              <div>
-                <div class="team-short">${team.short_name || ""}</div>
-                <h3 class="team-name">${team.name}</h3>
-              </div>
-            </div>
-            <div class="team-stat-row">
-              <div class="team-stat">
-                <div class="label">Purse Left</div>
-                <div class="value">${formatCompactAmount(team.purse_remaining)}</div>
-              </div>
-              <div class="team-stat">
-                <div class="label">Squad</div>
-                <div class="value">${team.squad_count || 0}${maxPlayers}</div>
-              </div>
-              <div class="team-stat">
-                <div class="label">Spent</div>
-                <div class="value">${formatCompactAmount(team.spent)}</div>
-              </div>
-              <div class="team-stat">
-                <div class="label">Slots Left</div>
-                <div class="value">${slotsRemaining}</div>
-              </div>
-            </div>
-            <div class="team-last-buy">${lastBuy}</div>
-          </div>
-        `;
-                    }).join("");
-                }
-
-                function renderEvents() {
-                    if (!recentEvents) return;
-                    if (!recentEventItems.length) {
-                        recentEvents.innerHTML = '<div class="section-sub">Waiting for live auction activity.</div>';
-                        return;
-                    }
-
-                    recentEvents.innerHTML = recentEventItems.slice(0, 8).map((event) => `
-        <div class="event-row level-${String(event.level || "info").toLowerCase()}">
-          <div class="event-main">${event.message || ""}</div>
-          <div class="event-meta">${event.time || ""}${event.lot_no ? ` | Lot ${event.lot_no}` : ""}</div>
-        </div>
-      `).join("");
-
-                    const tickerMessages = recentEventItems.slice(0, 12).map((event) => {
-                        return `${event.time || ""} | ${event.message || ""}`;
-                    });
-                    tickerTrack.textContent = tickerMessages.length ? tickerMessages.join("   |   ") : "Waiting for live auction activity.";
-                }
-
-                function upsertEvents(events) {
-                    if (!events || !events.length) return;
-                    const seen = new Map(recentEventItems.map((event) => [event.id, event]));
-                    events.forEach((event) => {
-                        if (!event || !event.id) return;
-                        seen.set(event.id, event);
-                        lastId = Math.max(lastId, Number(event.id) || 0);
-                    });
-                    recentEventItems = Array.from(seen.values()).sort((a, b) => Number(b.id) - Number(a.id));
-                    renderEvents();
-                }
-
-                function renderSnapshot(snapshot) {
-                    if (!snapshot) return;
-                    soldCountChip.textContent = snapshot.sold_total ?? 0;
-                    remainingCountChip.textContent = snapshot.unsold_total ?? 0;
-                    setStatusChip(snapshot);
-                    renderCurrentLot(snapshot.current_lot, snapshot);
-                    renderLatestSale(snapshot.latest_sale);
-                    renderHighestSold(snapshot.highest_sold);
-                    renderLeaderboard(snapshot.leaderboard || []);
-
-                    if (snapshot.banner && shell) {
-                        shell.style.backgroundImage = `url("${snapshot.banner}")`;
-                    }
-                    if (snapshot.banner && bannerZone) {
-                        bannerZone.style.backgroundImage = `url("${snapshot.banner}")`;
-                    }
-                }
-
-                function flashSale(latestSale) {
-                    if (!latestSale || !saleFlash) return;
-                    saleFlash.style.background = `linear-gradient(120deg, ${latestSale.primary_color || "#0F172A"}f2, ${latestSale.secondary_color || "#22C55E"}e6)`;
-                    saleFlashPlayer.textContent = latestSale.player || "";
-                    saleFlashMeta.textContent = `${latestSale.team || ""}${latestSale.lot_no ? ` | Lot ${latestSale.lot_no}` : ""}`;
-                    saleFlashPrice.textContent = formatCompactAmount(latestSale.price);
-                    saleFlash.classList.remove("show");
-                    void saleFlash.offsetWidth;
-                    saleFlash.classList.add("show");
-                }
-
-                async function fetchUpdates() {
-                    try {
-                        const res = await fetch(`{% url 'auction_updates_feed' slug=tournament.slug %}?after=${lastId}&_ts=${Date.now()}`, {
-                            headers: {"X-Requested-With": "XMLHttpRequest"},
-                            cache: "no-store",
-                        });
-                        const out = await res.json().catch(() => ({}));
-                        if (!res.ok || out.ok === false) return;
-
-                        if (Array.isArray(out.events)) {
-                            upsertEvents(out.events);
-                        }
-                        if (out.snapshot) {
-                            const nextSaleId = out.snapshot.latest_sale ? out.snapshot.latest_sale.id : null;
-                            if (latestSaleId !== null && nextSaleId && nextSaleId !== latestSaleId) {
-                                flashSale(out.snapshot.latest_sale);
-                            }
-                            latestSaleId = nextSaleId;
-                            renderSnapshot(out.snapshot);
-                        }
-                    } catch (err) {
-                    }
-                }
-
-                fullBtn?.addEventListener("click", async () => {
-                    try {
-                        if (!document.fullscreenElement) {
-                            await document.documentElement.requestFullscreen();
-                            fullBtn.textContent = "Exit Fullscreen";
-                        } else {
-                            await document.exitFullscreen();
-                            fullBtn.textContent = "Fullscreen";
-                        }
-                    } catch (err) {
-                    }
-                });
-
-                document.addEventListener("fullscreenchange", () => {
-                    if (!fullBtn) return;
-                    fullBtn.textContent = document.fullscreenElement ? "Exit Fullscreen" : "Fullscreen";
-                });
-
-                renderSnapshot(initialSnapshot);
-                fetchUpdates();
-                setInterval(fetchUpdates, 3000);
-            })();
-        </script>
-    {% endif %}
+<div class="stage" id="stageRoot" data-feed-url="{% url 'auction_updates_feed' slug=tournament.slug %}" data-placeholder="{% static 'img/player-placeholder.png' %}">
+  <header class="stage-head glass">
+    <div style="min-width:0"><div class="eyebrow">Auction Stage</div><h1 class="stage-title">{{ tournament.name }}</h1></div>{% if auction.banner %}<img class="auction-banner" src="{{ auction.banner.url }}" alt="Auction banner">{% endif %}
+    <div class="head-metrics"><div class="metric"><span>Sold</span><strong id="soldMetric">0</strong></div><div class="metric"><span>Remaining</span><strong id="remainingMetric">0</strong></div><div class="metric"><span>Progress</span><strong id="progressMetric">0%</strong></div><div class="metric"><span>Status</span><strong id="statusMetric">—</strong></div></div>
+    <div class="head-actions"><div class="health" id="feedHealth"><span class="health-dot"></span><span id="healthText">Connecting</span></div><button class="stage-btn" id="audioToggle" type="button">Enable audio</button><button class="stage-btn" id="motionToggle" type="button">Reduce motion</button><button class="stage-btn" id="qrToggle" type="button">Phone QR</button><button class="stage-btn" id="fullscreenToggle" type="button">Fullscreen</button></div>
+  </header>
+  {% if not auction %}<div class="glass" style="border-radius:22px"><div class="empty"><div><h2>No auction found</h2><p>Create an auction and lots to activate Stage Mode.</p></div></div></div>{% else %}
+  <main class="stage-main">
+    <section class="spotlight glass" id="spotlight"><div class="lot-line"><span class="lot-chip" id="lotChip">Waiting for player</span><span class="war-chip" id="warChip">🔥 Bidding war</span></div><div class="player-zone" id="playerZone"><div class="player-photo"><img id="playerPhoto" src="{% static 'img/player-placeholder.png' %}" alt="Current player"></div><div style="min-width:0"><h2 class="player-name" id="playerName">Auction ready</h2><div class="player-meta" id="playerMeta"></div><div class="stats" id="playerStats"></div></div></div><div class="bid-board"><div><div class="bid-label">Current bid</div><div class="bid-price" id="bidPrice">₹ 0</div></div><div class="leader"><img class="leader-logo" id="leaderLogo" alt="Leading team logo"><div class="leader-copy"><span>Leading team</span><strong id="leaderName">No bids yet</strong><small id="nextBid" style="color:#94a3b8"></small></div></div></div></section>
+    <aside class="rail"><section class="rail-card glass"><div class="section-title"><span>Head to head</span><span id="bidCount">0 bids</span></div><div class="battle" id="battle"><div class="empty" style="grid-column:1/-1;font-size:.7rem">Waiting for the first bid</div></div></section><section class="rail-card glass"><div class="section-title"><span>Live stories</span><span id="recordPrice">No sales yet</span></div><div class="stories" id="stories"></div></section><section class="rail-card glass" style="display:grid;grid-template-rows:auto minmax(0,1fr)"><div class="section-title"><span>Team board</span><span id="teamCount">0 teams</span></div><div class="team-grid" id="teamGrid"></div></section></aside>
+  </main>
+  <footer class="ticker glass"><span class="ticker-live">● LIVE</span><div class="ticker-window"><div class="ticker-track" id="tickerTrack">Stage feed is connecting…</div></div><span class="sponsor">{{ auction.code }}</span></footer>{% endif %}
+</div>
+<div class="show-overlay" id="showOverlay" aria-live="assertive"><div class="show-card"><div class="show-kicker" id="showKicker">Coming up</div><div class="show-title" id="showTitle"></div><div class="reveal-detail" id="revealDetail"><img id="revealPhoto" src="{% static 'img/player-placeholder.png' %}" alt="Player"><div><div class="reveal-meta" id="revealMeta"></div><div class="reveal-meta" id="revealStats" style="margin-top:8px"></div></div></div><div class="countdown" id="showCountdown" style="display:none"></div><div id="showMessage" style="color:#cbd5e1;font-size:clamp(.9rem,2vw,1.35rem)"></div></div></div>
+<div class="sold-overlay" id="soldOverlay" aria-live="assertive"><div class="sold-card" id="soldCard"><img class="sold-photo" id="soldPhoto" src="{% static 'img/player-placeholder.png' %}" alt="Sold player"><div class="sold-info"><div class="sold-word">SOLD</div><div class="sold-player" id="soldPlayer"></div><img class="sold-team-logo" id="soldTeamLogo" alt="Winning team"><div class="sold-team" id="soldTeam"></div><div class="sold-price" id="soldPrice"></div></div><div class="sold-tier" id="soldTier"></div></div><div class="overlay-actions"><button class="stage-btn" id="downloadSold" type="button">Download card</button><button class="stage-btn" id="closeSold" type="button">Close</button></div></div>
+<div class="qr-overlay" id="qrOverlay"><div class="qr-box"><div id="qrCode"></div><strong style="display:block;margin-top:10px">Follow the live auction</strong><small>{{ tournament.name }}</small><div style="margin-top:10px"><button class="stage-btn" id="closeQr" type="button" style="color:#0f172a;border-color:#cbd5e1">Close</button></div></div></div>
+{% if snapshot %}{{ snapshot|json_script:"initialStageSnapshot" }}{% endif %}
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+(() => {
+  const root=document.getElementById('stageRoot'); if(!root||!root.dataset.feedUrl) return; const $=id=>document.getElementById(id), placeholder=root.dataset.placeholder;
+  let snapshot=null,lastEventId=0,lastSaleId=0,lastBidCount=0,lastSuccess=0,lastPresentationVersion=-1,polling=false,audioOn=localStorage.getItem('auctionAudio')==='on',clockOffset=0,countdownTimer=null,soldTimer=null,events=[],recapShown=false;
+  const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); const img=(url,fallback=placeholder)=>url||fallback; const initial=$('initialStageSnapshot'); if(initial){try{snapshot=JSON.parse(initial.textContent)}catch(e){}}
+  function tone(kind){if(!audioOn)return;try{const C=window.AudioContext||window.webkitAudioContext,ctx=new C(),seq=kind==='sold'?[523,659,784]:kind==='final'?[740,620]:[440,554];seq.forEach((f,i)=>{const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=f;o.type='sine';g.gain.setValueAtTime(.0001,ctx.currentTime+i*.11);g.gain.exponentialRampToValueAtTime(.13,ctx.currentTime+i*.11+.015);g.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+i*.11+.1);o.connect(g).connect(ctx.destination);o.start(ctx.currentTime+i*.11);o.stop(ctx.currentTime+i*.11+.12)});setTimeout(()=>ctx.close(),800)}catch(e){}}
+  function setHealth(mode,label){const h=$('feedHealth');if(!h)return;h.className='health '+mode;$('healthText').textContent=label} function setImage(el,url){if(!el)return;el.onerror=()=>{el.onerror=null;el.src=placeholder};el.src=img(url)}
+  function renderLot(lot){if(!lot){$('lotChip').textContent='No active player';$('playerName').textContent=snapshot?.auction_completed?'Round complete':'Waiting for player';$('bidPrice').textContent='₹ 0';$('leaderName').textContent='No bids yet';$('playerMeta').innerHTML='';$('playerStats').innerHTML='';setImage($('playerPhoto'),'');return}
+    $('lotChip').textContent=`LOT ${lot.lot_no} • ENTRY ${lot.appearance_no||'—'} • ${lot.status}`;$('playerName').textContent=lot.player.name;$('bidPrice').textContent=lot.current_bid_display||'₹ 0';setImage($('playerPhoto'),lot.player.photo);$('playerMeta').innerHTML=[lot.player.role,`Base ${lot.base_price_display}`,lot.player.batting_style,lot.player.bowling_style].filter(Boolean).map(x=>`<span class="meta-pill">${esc(x)}</span>`).join('');const s=lot.player.stats||{};$('playerStats').innerHTML=[['Matches',s.matches],['Runs',s.runs],['Wickets',s.wickets]].filter(x=>x[1]!==undefined&&x[1]!==null&&x[1]!=='').map(x=>`<div class="stat"><span>${esc(x[0])}</span><strong>${esc(x[1])}</strong></div>`).join('');const lead=lot.leading_team;$('leaderName').textContent=lead?lead.name:'No bids yet';$('nextBid').textContent=`Next bid ${lot.next_bid_display}`;const logo=$('leaderLogo');if(lead?.logo){logo.style.display='block';setImage(logo,lead.logo)}else logo.style.display='none';$('spotlight').style.setProperty('--team-accent',lead?.accent_color||'#38bdf8');$('warChip').classList.toggle('show',!!lot.bidding_war);$('bidCount').textContent=`${lot.bid_count||0} bids • ${lot.bidder_count||0} teams`;renderBattle(lot.head_to_head||[]);if((lot.bid_count||0)>lastBidCount&&lastBidCount>0){tone('bid');$('bidPrice').animate([{transform:'scale(1)'},{transform:'scale(1.055)',color:lead?.accent_color||'#38bdf8'},{transform:'scale(1)'}],{duration:360})}lastBidCount=lot.bid_count||0}
+  function renderBattle(items){const b=$('battle');if(!items.length){b.innerHTML='<div class="empty" style="grid-column:1/-1;font-size:.7rem">Waiting for the first bid</div>';return}const side=x=>`<div class="battle-side"><img class="battle-logo" src="${esc(img(x.logo))}" alt=""><div class="battle-name"><strong>${esc(x.short_name||x.name)}</strong><span>${esc(x.amount_display)}</span></div></div>`;b.innerHTML=side(items[0])+(items[1]?`<span class="versus">VS</span>${side(items[1])}`:'<span></span><span></span>')}
+  function renderTeams(teams,leadingId){$('teamCount').textContent=`${teams.length} teams`;$('teamGrid').innerHTML=teams.map(t=>`<div class="team-tile ${String(t.id)===String(leadingId)?'leading':''}" style="--primary:${esc(t.primary_color)};--accent:${esc(t.accent_color)}"><img src="${esc(img(t.logo))}" alt=""><div class="team-main"><strong>${esc(t.short_name||t.name)}</strong><span>${esc(t.purse_remaining_display)} left</span></div><div class="team-count"><strong>${t.squad_count}</strong><span>players</span></div></div>`).join('')}
+  function renderStories(st,audience){const cells=[];if(audience?.predictions?.[0])cells.push(['Fan pick',`${audience.predictions[0].short_name} • ${audience.predictions[0].count}`]);if(st?.most_contested)cells.push(['Most contested',`${st.most_contested.player} • ${st.most_contested.bid_count}`]);if(st?.biggest_spender)cells.push(['Biggest spender',`${st.biggest_spender.team} • ${st.biggest_spender.amount_display}`]);if(st?.purse_king)cells.push(['Purse king',`${st.purse_king.team} • ${st.purse_king.amount_display}`]);$('stories').innerHTML=cells.slice(0,3).length?cells.slice(0,3).map(x=>`<div class="story"><span>${esc(x[0])}</span><strong>${esc(x[1])}</strong></div>`).join(''):'<div class="story" style="grid-column:1/-1"><span>Live stories</span><strong>Waiting for auction activity</strong></div>'}
+  function renderPresentation(p){clearInterval(countdownTimer);const o=$('showOverlay'),cd=$('showCountdown'),detail=$('revealDetail');if(recapShown&&snapshot?.auction_fully_completed)return;o.classList.remove('show');cd.style.display='none';detail.classList.remove('show');if(!p||p.state==='LIVE'){if(p)lastPresentationVersion=p.version;return}o.classList.add('show');$('showKicker').textContent=p.state==='REVEAL'?'Now presenting':p.state==='FINAL_CALL'?'Auctioneer final call':p.state==='BREAK'?'Auction break':'Announcement';$('showTitle').textContent=p.state==='REVEAL'?(snapshot?.current_lot?.player?.name||'Next player'):p.state==='BREAK'?'We’ll be right back':p.state==='ANNOUNCEMENT'?'Attention':'Final call';$('showMessage').textContent=p.message||'';if(p.state==='REVEAL'&&snapshot?.current_lot){const lot=snapshot.current_lot,player=lot.player,stats=player.stats||{};detail.classList.add('show');setImage($('revealPhoto'),player.photo);$('revealMeta').innerHTML=[player.role,`Base ${lot.base_price_display}`,`Lot ${lot.lot_no}`].filter(Boolean).map(x=>`<span class="meta-pill">${esc(x)}</span>`).join('');$('revealStats').innerHTML=[stats.matches!==undefined?`${stats.matches} matches`:'',stats.runs!==undefined?`${stats.runs} runs`:'',stats.wickets!==undefined?`${stats.wickets} wickets`:''].filter(Boolean).map(x=>`<span class="meta-pill">${esc(x)}</span>`).join('')}if(p.state==='FINAL_CALL'&&p.deadline){cd.style.display='block';const tick=()=>{const left=Math.max(0,Math.ceil((new Date(p.deadline).getTime()-(Date.now()+clockOffset))/1000));cd.textContent=String(left).padStart(2,'0');if(left===0)$('showMessage').textContent='Awaiting the auctioneer’s SOLD decision'};tick();countdownTimer=setInterval(tick,250);if(p.version!==lastPresentationVersion)tone('final')}lastPresentationVersion=p.version}
+  function renderSnapshot(s){if(!s)return;snapshot=s;if(s.presentation?.server_time)clockOffset=new Date(s.presentation.server_time).getTime()-Date.now();$('soldMetric').textContent=s.sold_total??0;$('remainingMetric').textContent=s.unsold_total??0;$('progressMetric').textContent=`${s.progress_percent||0}%`;$('statusMetric').textContent=s.status_display||s.status||'—';renderLot(s.current_lot);renderTeams(s.leaderboard||[],s.current_lot?.leading_team?.id);renderStories(s.storylines,s.audience);$('recordPrice').textContent=s.highest_sold?`Record ${s.highest_sold.price_display}`:'No sales yet';renderPresentation(s.presentation);if(s.latest_sale&&s.latest_sale.id!==lastSaleId)showSold(s.latest_sale);if(s.latest_sale)lastSaleId=s.latest_sale.id;if(s.auction_fully_completed&&s.recap&&!recapShown&&s.presentation?.state==='LIVE')showRecap(s.recap,s.sold_total)}
+  function showRecap(recap,soldTotal){recapShown=true;setTimeout(()=>{const top=(recap.top_purchases||[]).slice(0,3).map((x,i)=>`${i+1}. ${x.player} — ${x.team} (${x.price_display})`).join('  •  ');$('showKicker').textContent='Closing recap';$('showTitle').textContent='Auction Complete';$('showMessage').textContent=`${soldTotal} players sold${top?'  •  '+top:''}`;$('showCountdown').style.display='none';$('showOverlay').classList.add('show');if(window.confetti&&!document.body.classList.contains('reduced-motion'))confetti({particleCount:260,spread:110,origin:{y:.65}});setTimeout(()=>$('showOverlay').classList.remove('show'),14000)},800)}
+  function showSold(sale){clearTimeout(soldTimer);const o=$('soldOverlay'),card=$('soldCard'),logo=$('soldTeamLogo');card.style.setProperty('--sold-primary',sale.primary_color||'#0f172a');card.style.setProperty('--sold-accent',sale.accent_color||'#fbbf24');setImage($('soldPhoto'),sale.player_photo);if(sale.team_logo){logo.style.display='block';setImage(logo,sale.team_logo)}else logo.style.display='none';$('soldPlayer').textContent=sale.player;$('soldTeam').textContent=sale.team;$('soldPrice').textContent=sale.price_display;$('soldTier').textContent=({record:'New record',milestone:'Milestone sale',competitive:'Bidding war',normal:'Sold'}[sale.celebration_tier]||'Sold');o.classList.add('show');tone('sold');if(window.confetti&&!document.body.classList.contains('reduced-motion')){const n={record:240,milestone:170,competitive:120,normal:70}[sale.celebration_tier]||70;confetti({particleCount:n,spread:sale.celebration_tier==='record'?100:70,origin:{y:.65},colors:[sale.primary_color,sale.secondary_color,sale.accent_color,'#ffffff']})}soldTimer=setTimeout(()=>o.classList.remove('show'),sale.celebration_tier==='record'?7500:4800)}
+  function renderTicker(newEvents){if(newEvents?.length)events=[...events,...newEvents].slice(-18);const msgs=events.slice().reverse().map(e=>e.message).filter(Boolean);$('tickerTrack').textContent=msgs.length?msgs.join('     ◆     '):'Waiting for live auction activity…'}
+  async function poll(){if(polling)return;polling=true;try{const url=root.dataset.feedUrl+(lastEventId?`?after=${lastEventId}`:'');const res=await fetch(url,{headers:{'X-Requested-With':'XMLHttpRequest'},cache:'no-store'});if(!res.ok)throw new Error('Feed unavailable');const data=await res.json();if(!data.ok)throw new Error(data.error||'Feed unavailable');const incoming=data.events||[];if(incoming.length)lastEventId=Math.max(lastEventId,...incoming.map(e=>e.id));renderTicker(incoming);renderSnapshot(data.snapshot);lastSuccess=Date.now();setHealth('','Live')}catch(e){setHealth('offline','Reconnecting')}finally{polling=false}}
+  setInterval(()=>{if(lastSuccess&&Date.now()-lastSuccess>7000)setHealth('stale','Feed delayed')},1000);if(snapshot){lastSaleId=snapshot.latest_sale?.id||0;renderSnapshot(snapshot)}poll();setInterval(poll,2000);
+  $('audioToggle')?.addEventListener('click',()=>{audioOn=!audioOn;localStorage.setItem('auctionAudio',audioOn?'on':'off');$('audioToggle').textContent=audioOn?'Audio on':'Enable audio';if(audioOn)tone('bid')});$('audioToggle').textContent=audioOn?'Audio on':'Enable audio';$('motionToggle')?.addEventListener('click',()=>{document.body.classList.toggle('reduced-motion');$('motionToggle').textContent=document.body.classList.contains('reduced-motion')?'Motion reduced':'Reduce motion'});$('fullscreenToggle')?.addEventListener('click',()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen());$('closeSold')?.addEventListener('click',()=>$('soldOverlay').classList.remove('show'));
+  $('qrToggle')?.addEventListener('click',()=>{$('qrOverlay').classList.add('show');if(!$('qrCode').hasChildNodes()&&window.QRCode)new QRCode($('qrCode'),{text:location.href.replace('/stage/','/updates/'),width:220,height:220,colorDark:'#07101f',colorLight:'#ffffff'})});$('closeQr')?.addEventListener('click',()=>$('qrOverlay').classList.remove('show'));
+  $('downloadSold')?.addEventListener('click',async()=>{const s=snapshot?.latest_sale;if(!s)return;const c=document.createElement('canvas');c.width=1600;c.height=900;const x=c.getContext('2d'),g=x.createLinearGradient(0,0,1600,900);g.addColorStop(0,s.primary_color||'#0f172a');g.addColorStop(1,'#020617');x.fillStyle=g;x.fillRect(0,0,c.width,c.height);x.fillStyle=s.accent_color||'#fbbf24';x.fillRect(0,0,24,900);x.fillStyle='#fbbf24';x.font='900 54px Poppins, sans-serif';x.fillText('SOLD',680,210);x.fillStyle='#fff';x.font='900 88px Poppins, sans-serif';wrapText(x,s.player,680,330,820,100);x.font='700 46px Poppins, sans-serif';x.fillText(s.team,680,560);x.fillStyle='#fbbf24';x.font='900 92px Poppins, sans-serif';x.fillText(s.price_display,680,690);x.fillStyle='#cbd5e1';x.font='600 30px Poppins, sans-serif';x.fillText('{{ tournament.name|escapejs }}',680,780);try{const im=await loadImage(s.player_photo||placeholder);x.drawImage(im,70,100,520,700)}catch(e){}const a=document.createElement('a');a.download=`sold-${String(s.player).replace(/[^a-z0-9]+/gi,'-').toLowerCase()}.png`;a.href=c.toDataURL('image/png');a.click()});
+  function wrapText(ctx,text,x,y,max,line){let row='',yy=y;for(const word of String(text).split(' ')){const test=row+word+' ';if(ctx.measureText(test).width>max&&row){ctx.fillText(row,x,yy);row=word+' ';yy+=line}else row=test}ctx.fillText(row,x,yy)} function loadImage(src){return new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=reject;i.src=src})}
+})();
+</script>
 {% endblock %}
