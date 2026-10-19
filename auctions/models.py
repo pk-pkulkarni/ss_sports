@@ -4,6 +4,8 @@ from django.core.validators import MinValueValidator, RegexValidator
 from django.db import models
 from tournaments.models import Tournament
 
+from .constants import JERSEY_SIZE_CHOICE_LABELS
+
 HEX_COLOR_VALIDATOR = RegexValidator(
     regex=r"^#[0-9A-Fa-f]{6}$",
     message="Enter a valid hex color like #22C55E.",
@@ -260,12 +262,14 @@ class Player(models.Model):
         NA = "NA", "Prefer not to say"
 
     class JerseySize(models.TextChoices):
-        XS = "XS", "XS"
-        S = "S", "S"
-        M = "M", "M"
-        L = "L", "L"
-        XL = "XL", "XL"
-        XXL = "XXL", "XXL"
+        XS = "XS", JERSEY_SIZE_CHOICE_LABELS["XS"]
+        S = "S", JERSEY_SIZE_CHOICE_LABELS["S"]
+        M = "M", JERSEY_SIZE_CHOICE_LABELS["M"]
+        L = "L", JERSEY_SIZE_CHOICE_LABELS["L"]
+        XL = "XL", JERSEY_SIZE_CHOICE_LABELS["XL"]
+        XXL = "XXL", JERSEY_SIZE_CHOICE_LABELS["XXL"]
+        XXXL = "3XL", JERSEY_SIZE_CHOICE_LABELS["3XL"]
+        XXXXL = "4XL", JERSEY_SIZE_CHOICE_LABELS["4XL"]
 
     tournament = models.ForeignKey(
         Tournament,

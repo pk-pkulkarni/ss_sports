@@ -540,6 +540,37 @@ def _latest_sale_payload(auction: Auction) -> dict | None:
     }
 
 
+def _latest_unsold_payload(auction: Auction) -> dict | None:
+    latest_unsold = (
+        AuctionEvent.objects.filter(
+            auction=auction,
+            event_type=AuctionEvent.EventType.UNSOLD,
+        )
+        .select_related("lot", "player")
+        .order_by("-id")
+        .first()
+    )
+    if not latest_unsold:
+        return None
+
+    return {
+        "id": latest_unsold.id,
+        "player": latest_unsold.player.name if latest_unsold.player_id else "",
+        "player_photo": (
+            latest_unsold.player.photo.url
+            if latest_unsold.player_id and latest_unsold.player.photo
+            else ""
+        ),
+        "player_role": (
+            latest_unsold.player.get_role_display()
+            if latest_unsold.player_id and latest_unsold.player.role
+            else ""
+        ),
+        "lot_no": latest_unsold.lot.lot_no if latest_unsold.lot_id else None,
+        "time": latest_unsold.created_at.strftime("%H:%M:%S"),
+    }
+
+
 def _stage_leaderboard(auction: Auction) -> list[dict]:
     teams = list(auction.tournament.teams.filter(is_active=True).order_by("name"))
     squad_count_map = {
@@ -722,6 +753,7 @@ def _public_auction_snapshot(auction: Auction) -> dict:
         "banner": auction.banner.url if auction.banner else "",
         "current_lot": _serialize_stage_lot(current_lot),
         "latest_sale": _latest_sale_payload(auction),
+        "latest_unsold": _latest_unsold_payload(auction),
         "highest_sold": completion["highest_sold"],
         "sold_total": sold_total,
         "unsold_total": completion["unsold_total"],
@@ -1228,6 +1260,7 @@ def mark_unsold(request, lot_id: int):
             AuctionLot.Status.UNSOLD,
         ],
     ).exists()
+    unsold_card = _latest_unsold_payload(lot.auction)
 
     return JsonResponse(
         {
@@ -1236,6 +1269,7 @@ def mark_unsold(request, lot_id: int):
             "status": "UNSOLD",
             "auction_completed": done,
             "auction_fully_completed": fully_done,
+            "unsold_card": unsold_card,
         }
     )
 

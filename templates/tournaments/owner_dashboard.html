@@ -1342,7 +1342,7 @@
 
                 <div class="player-browser-toolbar">
                     <input type="search" class="row-control" id="playerCatalogSearch"
-                           placeholder="Search by first name or surname" autocomplete="off">
+                           placeholder="Search by name or contact number" autocomplete="off">
                     <select class="row-control" id="playerCatalogStatus" aria-label="Filter players by status">
                         <option value="">All statuses</option>
                         <option value="sold">Sold</option>
@@ -1358,6 +1358,7 @@
                         <thead>
                         <tr>
                             <th>Player</th>
+                            <th>Contact</th>
                             <th>Status</th>
                             <th>Stats</th>
                             <th>Watchlist</th>
@@ -1365,7 +1366,7 @@
                         </thead>
                         <tbody id="playerCatalogBody">
                         {% for item in player_catalog %}
-                            <tr data-player-row data-search="{{ item.player.name|lower }}"
+                            <tr data-player-row data-search="{{ item.player.name|lower }} {{ item.player.phone|default:'' }}"
                                 data-status="{{ item.status_class }}">
                                 <td>
                                     <div class="catalog-player-name">{{ item.player.name }}</div>
@@ -1373,6 +1374,7 @@
                                         <div class="player-sub">{{ item.assignment.team.name }}</div>
                                     {% endif %}
                                 </td>
+                                <td>{{ item.player.phone|default:"—" }}</td>
                                 <td><span class="player-status {{ item.status_class }}">{{ item.status }}</span></td>
                                 <td>
                                     <div class="catalog-stats">

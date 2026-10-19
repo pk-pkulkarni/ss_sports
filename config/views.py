@@ -31,6 +31,6 @@ def landing(request):
         {
             "registration_form": registration_form,
             "has_tournaments": has_tournaments,
-            "qr_code_url": f"{settings.MEDIA_URL}qr/player_registration_qr.png",
+            "qr_code_url": f"{settings.MEDIA_URL}qr/player_registration_qr.jpeg",
         },
     )

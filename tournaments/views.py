@@ -24,6 +24,7 @@ from auctions.models import (
     TeamPlayer,
     TeamWatchlist,
 )
+from auctions.constants import jersey_size_label, jersey_size_number
 from auctions.rules import (
     AUCTION_TYPE_OPEN,
     AUCTION_TYPE_RULE_BASED,
@@ -1832,6 +1833,10 @@ def export_players_xlsx(request, slug: str):
         # "City",
         # "Age",
         "Contact",
+        "Jersey Name",
+        "Jersey No",
+        "Jersey Size",
+        "Jersey Size No",
         # "Active",
         # "Base Price",
         # "Reserve Price",
@@ -1843,9 +1848,6 @@ def export_players_xlsx(request, slug: str):
         # "Sold Price",
         # "Batting Style",
         # "Bowling Style",
-        # "Jersey No",
-        # "Jersey Name",
-        # "Jersey Size",
         # "Notes",
         # "Stats",
     ]
@@ -1869,6 +1871,10 @@ def export_players_xlsx(request, slug: str):
                 # p.city or "",
                 # p.age or "",
                 p.phone or "",
+                p.jersey_name or "",
+                p.jersey_no if p.jersey_no is not None else "",
+                jersey_size_label(p.jersey_size),
+                jersey_size_number(p.jersey_size) or "",
                 # "Yes" if p.is_active else "No",
                 # p.base_price or 0,
                 # p.reserve_price or 0,
@@ -1880,9 +1886,6 @@ def export_players_xlsx(request, slug: str):
                 # lot.sold_price if lot and lot.sold_price is not None else "",
                 # p.batting_style or "",
                 # p.bowling_style or "",
-                # p.jersey_no or "",
-                # p.jersey_name or "",
-                # p.jersey_size or "",
                 # p.notes or "",
                 # stats_val,
             ]
@@ -1892,10 +1895,14 @@ def export_players_xlsx(request, slug: str):
     ws.freeze_panes = "A2"
     widths = [
         28,  # Name
+        16,  # Contact
+        18,  # Jersey Name
+        12,  # Jersey No
+        14,  # Jersey Size
+        16,  # Jersey Size No
         # 14,  # Role
         # 18,  # City
         # 8,   # Age
-        # 16,  # Phone
         # 8,   # Active
         # 12,  # Base
         # 12,  # Reserve
@@ -1907,9 +1914,6 @@ def export_players_xlsx(request, slug: str):
         # 12,  # Sold Price
         # 16,  # Batting
         # 16,  # Bowling
-        # 10,  # Jersey No
-        # 14,  # Jersey Name
-        # 12,  # Jersey Size
         # 26,  # Notes
         # 44,  # Stats
     ]

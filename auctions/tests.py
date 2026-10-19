@@ -228,6 +228,22 @@ class AuctionRulesTests(TestCase):
         self.assertEqual(data["snapshot"]["current_lot"]["player"]["name"], "Spotlight Player")
         self.assertEqual(data["snapshot"]["leaderboard"][0]["name"], "Stage XI")
 
+    def test_mark_unsold_adds_unsold_card_to_response_and_stage_snapshot(self):
+        lot = self.create_lot("Unsold Card Player", lot_no=2)
+
+        response = self.client.post(reverse("mark_unsold", kwargs={"lot_id": lot.id}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["unsold_card"]["player"], "Unsold Card Player")
+        self.assertEqual(response.json()["unsold_card"]["lot_no"], 2)
+
+        feed_response = self.client.get(
+            reverse("auction_updates_feed", kwargs={"slug": self.tournament.slug})
+        )
+        latest_unsold = feed_response.json()["snapshot"]["latest_unsold"]
+        self.assertEqual(latest_unsold["player"], "Unsold Card Player")
+        self.assertEqual(latest_unsold["lot_no"], 2)
+
     def test_public_stage_page_is_accessible_without_login(self):
         self.create_lot("Open Stage Player", lot_no=1)
         self.client.logout()
@@ -238,6 +254,7 @@ class AuctionRulesTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Auction Stage")
+        self.assertContains(response, 'id="unsoldOverlay"')
 
     def test_show_control_persists_reveal_without_changing_lot(self):
         lot = self.create_lot("Reveal Player", lot_no=1)

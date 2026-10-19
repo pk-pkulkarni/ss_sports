@@ -1,3 +1,5 @@
+from io import BytesIO
+
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
@@ -14,6 +16,7 @@ from auctions.models import (
     TeamPlayer,
     TeamWatchlist,
 )
+from auctions.constants import jersey_size_label, jersey_size_number
 
 from .forms import DEFAULT_PLAYER_BASE_PRICE, PlayerForm, PublicPlayerRegistrationForm
 from .models import Tournament
@@ -75,6 +78,17 @@ class PlayerBasePriceFormTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
         player = form.save()
         self.assertEqual(player.base_price, DEFAULT_PLAYER_BASE_PRICE)
+
+    def test_jersey_size_choices_include_numeric_mapping_and_extended_sizes(self):
+        choices = dict(PublicPlayerRegistrationForm().fields["jersey_size"].choices)
+
+        self.assertEqual(choices[Player.JerseySize.XS], "XS - 34")
+        self.assertEqual(choices[Player.JerseySize.M], "M - 38")
+        self.assertEqual(choices[Player.JerseySize.XXL], "2XL - 44")
+        self.assertEqual(choices[Player.JerseySize.XXXL], "3XL - 46")
+        self.assertEqual(choices[Player.JerseySize.XXXXL], "4XL - 48")
+        self.assertEqual(jersey_size_label(Player.JerseySize.XXL), "2XL")
+        self.assertEqual(jersey_size_number(Player.JerseySize.XXL), 44)
 
 
 class TeamOwnerDashboardTests(TestCase):
@@ -233,6 +247,7 @@ class TeamOwnerDashboardTests(TestCase):
             role=Player.Role.BOWL,
             base_price=60000,
             stats={"matches": 8, "wickets": 12},
+            phone="9876543210",
             is_active=True,
         )
         AuctionLot.objects.create(
@@ -258,10 +273,43 @@ class TeamOwnerDashboardTests(TestCase):
         self.assertContains(response, "Unsold Searchable Surname")
         self.assertContains(response, "Matches:")
         self.assertContains(response, "Wickets:")
+        self.assertContains(response, "<th>Contact</th>", html=True)
+        self.assertContains(response, "9876543210")
         self.assertNotContains(response, "<th>Role</th>", html=True)
         self.assertNotContains(response, "<th>Base Price</th>", html=True)
         self.assertNotContains(response, "<th>Lot</th>", html=True)
         self.assertNotContains(response, "player.photo")
+
+    def test_player_export_includes_contact_and_both_jersey_size_formats(self):
+        player = Player.objects.create(
+            tournament=self.tournament,
+            name="Jersey Export Player",
+            phone="9123456780",
+            jersey_name="EXPORTER",
+            jersey_no=27,
+            jersey_size=Player.JerseySize.XXL,
+            is_active=True,
+        )
+        self.client.force_login(self.organizer)
+
+        response = self.client.get(
+            reverse("players_export_xlsx", kwargs={"slug": self.tournament.slug})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        from openpyxl import load_workbook
+
+        workbook = load_workbook(BytesIO(response.content), read_only=True)
+        rows = list(workbook.active.iter_rows(values_only=True))
+        self.assertEqual(
+            rows[0],
+            ("Name", "Contact", "Jersey Name", "Jersey No", "Jersey Size", "Jersey Size No"),
+        )
+        exported = next(row for row in rows[1:] if row[0] == player.name)
+        self.assertEqual(
+            exported,
+            (player.name, "9123456780", "EXPORTER", 27, "2XL", 44),
+        )
 
     def test_running_watchlist_player_highlights_current_lot(self):
         TeamWatchlist.objects.create(
