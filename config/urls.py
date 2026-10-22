@@ -62,6 +62,11 @@ urlpatterns = [
     path("t/<slug:slug>/teams-dashboard/", tournament_views.teams_dashboard, name="teams_dashboard"),
     path("t/<slug:slug>/teams-export/", tournament_views.export_teams_xlsx, name="teams_export_xlsx"),
     path("t/<slug:slug>/players-export/", tournament_views.export_players_xlsx, name="players_export_xlsx"),
+    path(
+        "t/<slug:slug>/players-export/eligible/",
+        tournament_views.export_eligible_players_xlsx,
+        name="eligible_players_export_xlsx",
+    ),
 
     # Auction screen (UI)
     path("t/<slug:slug>/auction/", auction_views.auction_screen, name="auction_screen"),

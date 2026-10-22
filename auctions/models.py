@@ -324,6 +324,10 @@ class Player(models.Model):
     stats = models.JSONField(null=True, blank=True)
 
     is_active = models.BooleanField(default=True)
+    is_eligible_for_auction = models.BooleanField(
+        default=True,
+        help_text="Only eligible players are included in auction lots and owner dashboards.",
+    )
     notes = models.TextField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)

@@ -7,7 +7,7 @@ from .models import Auction, AuctionLot, Player, TeamPlayer
 
 def generate_lots_from_active_players(auction: Auction) -> tuple[int, int]:
     """
-    Create AuctionLot rows for all ACTIVE players in the auction's tournament.
+    Create AuctionLot rows for all active, auction-eligible players in the tournament.
 
     - Uses sequential lot_no after the current max lot_no.
     - Skips players that already have lots in this auction.
@@ -35,9 +35,11 @@ def generate_lots_from_active_players(auction: Auction) -> tuple[int, int]:
         or 0
     )
 
-    active_players = Player.objects.filter(tournament=tournament, is_active=True).order_by(
-        "name"
-    )
+    active_players = Player.objects.filter(
+        tournament=tournament,
+        is_active=True,
+        is_eligible_for_auction=True,
+    ).order_by("name")
 
     lots_to_create = []
     next_no = max_lot_no + 1
@@ -87,7 +89,7 @@ def generate_random_lots_from_active_players(
     auction: Auction, max_lots: int = 4, reset: bool = True
 ) -> tuple[int, int]:
     """
-    Randomly distribute ACTIVE players into up to max_lots lots.
+    Randomly distribute active, auction-eligible players into up to max_lots lots.
     - If reset=True, existing lots (and bids) for this auction are deleted.
     - Players are shuffled and assigned in round-robin across lot_no 1..N.
     - Each lot gets a randomized lot_order.
@@ -110,7 +112,13 @@ def generate_random_lots_from_active_players(
         .values_list("player_id", flat=True)
     )
 
-    players = list(Player.objects.filter(tournament=tournament, is_active=True))
+    players = list(
+        Player.objects.filter(
+            tournament=tournament,
+            is_active=True,
+            is_eligible_for_auction=True,
+        )
+    )
     if not players:
         return 0, 0
 

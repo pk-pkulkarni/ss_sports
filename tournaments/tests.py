@@ -1,4 +1,5 @@
 from io import BytesIO
+from datetime import date
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -78,6 +79,54 @@ class PlayerBasePriceFormTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
         player = form.save()
         self.assertEqual(player.base_price, DEFAULT_PLAYER_BASE_PRICE)
+        self.assertTrue(player.is_eligible_for_auction)
+
+    def _registration_form(self, *, name, gender, age):
+        today = date.today()
+        try:
+            dob = today.replace(year=today.year - age)
+        except ValueError:
+            dob = date(today.year - age, 2, 28)
+
+        return PublicPlayerRegistrationForm(
+            data={
+                "tournament": self.tournament.pk,
+                "name": name,
+                "gender": gender,
+                "building": "D-1",
+                "flat_no": "101",
+                "dob": dob.isoformat(),
+                "phone": "9999999999",
+                "jersey_no": 7,
+                "jersey_name": "REG",
+                "jersey_size": Player.JerseySize.M,
+            },
+            files={
+                "payment_screenshot": SimpleUploadedFile(
+                    f"{name}.gif",
+                    (
+                        b"GIF89a\x01\x00\x01\x00\x80\x00\x00"
+                        b"\x00\x00\x00\xff\xff\xff!\xf9\x04"
+                        b"\x01\x00\x00\x00\x00,\x00\x00\x00"
+                        b"\x00\x01\x00\x01\x00\x00\x02\x02D"
+                        b"\x01\x00;"
+                    ),
+                    content_type="image/gif",
+                )
+            },
+        )
+
+    def test_public_registration_marks_women_as_not_auction_eligible(self):
+        form = self._registration_form(name="Adult Woman", gender=Player.Gender.FEMALE, age=25)
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertFalse(form.save().is_eligible_for_auction)
+
+    def test_public_registration_marks_13_year_old_boy_as_not_auction_eligible(self):
+        form = self._registration_form(name="Junior Boy", gender=Player.Gender.MALE, age=13)
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertFalse(form.save().is_eligible_for_auction)
 
     def test_jersey_size_choices_include_numeric_mapping_and_extended_sizes(self):
         choices = dict(PublicPlayerRegistrationForm().fields["jersey_size"].choices)
@@ -310,6 +359,62 @@ class TeamOwnerDashboardTests(TestCase):
             exported,
             (player.name, "9123456780", "EXPORTER", 27, "2XL", 44),
         )
+
+    def test_eligible_player_export_excludes_ineligible_registrations(self):
+        eligible = Player.objects.create(
+            tournament=self.tournament,
+            name="Eligible Export Player",
+            is_eligible_for_auction=True,
+        )
+        ineligible = Player.objects.create(
+            tournament=self.tournament,
+            name="All Players Export Only",
+            is_eligible_for_auction=False,
+        )
+        self.client.force_login(self.organizer)
+
+        all_response = self.client.get(
+            reverse("players_export_xlsx", kwargs={"slug": self.tournament.slug})
+        )
+        eligible_response = self.client.get(
+            reverse("eligible_players_export_xlsx", kwargs={"slug": self.tournament.slug})
+        )
+
+        from openpyxl import load_workbook
+
+        all_rows = list(load_workbook(BytesIO(all_response.content), read_only=True).active.iter_rows(values_only=True))
+        eligible_rows = list(
+            load_workbook(BytesIO(eligible_response.content), read_only=True).active.iter_rows(values_only=True)
+        )
+        self.assertIn(eligible.name, {row[0] for row in all_rows[1:]})
+        self.assertIn(ineligible.name, {row[0] for row in all_rows[1:]})
+        self.assertIn(eligible.name, {row[0] for row in eligible_rows[1:]})
+        self.assertNotIn(ineligible.name, {row[0] for row in eligible_rows[1:]})
+
+    def test_owner_dashboard_and_lot_manager_hide_ineligible_players(self):
+        ineligible = Player.objects.create(
+            tournament=self.tournament,
+            name="Not For Auction Player",
+            is_active=True,
+            is_eligible_for_auction=False,
+        )
+        AuctionLot.objects.create(
+            auction=self.auction,
+            player=ineligible,
+            lot_no=4,
+            lot_order=1,
+            status=AuctionLot.Status.PENDING,
+        )
+
+        self.client.force_login(self.owner)
+        owner_response = self.client.get(
+            reverse("owner_dashboard", kwargs={"slug": self.tournament.slug, "team_id": self.team.id})
+        )
+        self.assertNotContains(owner_response, ineligible.name)
+
+        self.client.force_login(self.organizer)
+        lot_response = self.client.get(reverse("lot_manager", kwargs={"slug": self.tournament.slug}))
+        self.assertNotContains(lot_response, ineligible.name)
 
     def test_running_watchlist_player_highlights_current_lot(self):
         TeamWatchlist.objects.create(

@@ -46,6 +46,14 @@
             {% for e in form.is_active.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
           </div>
 
+          <div class="col-12 col-md-4 d-flex align-items-end">
+            <div class="form-check">
+              {{ form.is_eligible_for_auction }}
+              <label class="form-check-label">Eligible for auction</label>
+            </div>
+            {% for e in form.is_eligible_for_auction.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+
           <div class="col-12 col-md-6">
             <label class="form-label">{{ form.phone.label }}</label>
             {{ form.phone }}

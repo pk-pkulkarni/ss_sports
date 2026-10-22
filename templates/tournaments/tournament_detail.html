@@ -301,8 +301,8 @@
             </div>
 
             <div class="d-flex flex-wrap gap-2">
-                <a class="btn btn-outline-light" href="{% url 'players_export_xlsx' slug=tournament.slug %}">Export
-                    Players</a>
+                <a class="btn btn-outline-light" href="{% url 'players_export_xlsx' slug=tournament.slug %}">Export All Players</a>
+                <a class="btn btn-outline-light" href="{% url 'eligible_players_export_xlsx' slug=tournament.slug %}">Export Auction-Eligible Players</a>
                 <input id="q" class="control" style="min-width:260px;" placeholder="Search player name…"/>
                 <select id="role" class="control">
                     <option value="">All roles</option>
@@ -445,6 +445,12 @@
                                         <label class="form-check-label">Active</label>
                                     </div>
                                 </div>
+                                <div class="col-12 col-md-4 d-flex align-items-end">
+                                    <div class="form-check">
+                                        {{ player_form.is_eligible_for_auction }}
+                                        <label class="form-check-label">Eligible for auction</label>
+                                    </div>
+                                </div>
                                 <div class="col-12 col-md-6">
                                     <label class="form-label">{{ player_form.phone.label }}</label>
                                     {{ player_form.phone }}
@@ -551,6 +557,12 @@
                                     <div class="form-check">
                                         {{ player_form.is_active }}
                                         <label class="form-check-label">Active</label>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-4 d-flex align-items-end">
+                                    <div class="form-check">
+                                        {{ player_form.is_eligible_for_auction }}
+                                        <label class="form-check-label">Eligible for auction</label>
                                     </div>
                                 </div>
                                 <div class="col-12 col-md-6">
@@ -890,6 +902,9 @@
 
                     const isActive = editModal.querySelector('[name="is_active"]');
                     if (isActive) isActive.checked = btn.dataset.playerActive === "1";
+
+                    const isEligible = editModal.querySelector('[name="is_eligible_for_auction"]');
+                    if (isEligible) isEligible.checked = btn.dataset.playerEligible === "1";
 
                     const photo = editModal.querySelector('[name="photo"]');
                     if (photo) photo.value = "";

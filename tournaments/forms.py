@@ -125,6 +125,7 @@ class PlayerForm(forms.ModelForm):
             "name",
             "photo",
             "is_active",
+            "is_eligible_for_auction",
             "phone",
             "city",
             "age",
@@ -137,6 +138,7 @@ class PlayerForm(forms.ModelForm):
         ]
         widgets = {
             "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "is_eligible_for_auction": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "notes": forms.Textarea(attrs={"rows": 3}),
         }
 
@@ -144,6 +146,7 @@ class PlayerForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
 
         self.fields["is_active"].initial = True
+        self.fields["is_eligible_for_auction"].initial = True
         if not (self.instance and self.instance.pk):
             self.fields["base_price"].initial = DEFAULT_PLAYER_BASE_PRICE
         # Populate stat fields from instance.stats
@@ -155,7 +158,7 @@ class PlayerForm(forms.ModelForm):
                 self.fields[key].initial = stats.get(key, "")
 
         for name, f in self.fields.items():
-            if name == "is_active":
+            if name in {"is_active", "is_eligible_for_auction"}:
                 continue
             if isinstance(
                     f.widget,
@@ -309,6 +312,14 @@ class PublicPlayerRegistrationForm(forms.ModelForm):
         if dob:
             today = date.today()
             instance.age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+
+        # The public form registers every division, while only men older than
+        # 13 participate in the auction. Registrants cannot override this.
+        instance.is_eligible_for_auction = (
+            instance.gender == Player.Gender.MALE
+            and instance.age is not None
+            and instance.age > 13
+        )
 
         # Public registrations are active by default.
         instance.is_active = True

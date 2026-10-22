@@ -107,7 +107,11 @@ def _available_lot_count_for_rules(auction: Auction, lot_no: int) -> int:
         .values_list("player_id", flat=True)
     )
     return (
-        AuctionLot.objects.filter(auction=auction, lot_no=lot_no)
+        AuctionLot.objects.filter(
+            auction=auction,
+            lot_no=lot_no,
+            player__is_eligible_for_auction=True,
+        )
         .exclude(status=AuctionLot.Status.WITHDRAWN)
         .exclude(player_id__in=assigned_player_ids)
         .count()
@@ -186,6 +190,7 @@ def _restricted_lot_no_for_owner_view(auction: Auction) -> int | None:
         has_open_or_unsold = AuctionLot.objects.filter(
             auction=auction,
             lot_no=lot_no,
+            player__is_eligible_for_auction=True,
             status__in=[
                 AuctionLot.Status.PENDING,
                 AuctionLot.Status.RUNNING,
@@ -203,7 +208,10 @@ def _current_lot_for_owner_view(auction: Auction | None):
         return None
 
     restricted_lot_no = _restricted_lot_no_for_owner_view(auction)
-    lot_scope = AuctionLot.objects.filter(auction=auction)
+    lot_scope = AuctionLot.objects.filter(
+        auction=auction,
+        player__is_eligible_for_auction=True,
+    )
     if restricted_lot_no:
         lot_scope = lot_scope.filter(lot_no=restricted_lot_no)
 
@@ -458,7 +466,10 @@ def _player_lot_map(auction: Auction | None) -> dict[int, AuctionLot]:
         return {}
     return {
         lot.player_id: lot
-        for lot in AuctionLot.objects.filter(auction=auction)
+        for lot in AuctionLot.objects.filter(
+            auction=auction,
+            player__is_eligible_for_auction=True,
+        )
         .select_related("player")
         .order_by("lot_no", "lot_order", "id")
     }
@@ -496,7 +507,11 @@ def _owner_player_catalog(
     }
 
     catalog = []
-    for player in Player.objects.filter(tournament=tournament, is_active=True).order_by("name"):
+    for player in Player.objects.filter(
+        tournament=tournament,
+        is_active=True,
+        is_eligible_for_auction=True,
+    ).order_by("name"):
         assignment = assignments.get(player.id)
         lot = lot_by_player_id.get(player.id)
 
@@ -541,7 +556,11 @@ def _build_owner_dashboard_context(user, team: Team) -> dict:
     self_locked_player_id = owner_access.linked_player_id if owner_access else None
 
     squad_qs = (
-        TeamPlayer.objects.filter(tournament=tournament, team=team)
+        TeamPlayer.objects.filter(
+            tournament=tournament,
+            team=team,
+            player__is_eligible_for_auction=True,
+        )
         .exclude(status=TeamPlayer.Status.RELEASED)
         .select_related("player")
         .order_by("-designation", "-bought_price", "player__name")
@@ -571,6 +590,7 @@ def _build_owner_dashboard_context(user, team: Team) -> dict:
                 auction=auction,
                 sold_to_team=team,
                 status=AuctionLot.Status.SOLD,
+                player__is_eligible_for_auction=True,
             )
             .select_related("player")
             .order_by("lot_no", "lot_order", "player__name")
@@ -627,6 +647,7 @@ def _build_owner_dashboard_context(user, team: Team) -> dict:
     if auction:
         recent_team_events = list(
             auction.events.filter(Q(team=team) | Q(lot__sold_to_team=team))
+            .filter(Q(player__isnull=True) | Q(player__is_eligible_for_auction=True))
             .select_related("player", "team", "lot")
             .order_by("-id")[:8]
         )
@@ -638,7 +659,10 @@ def _build_owner_dashboard_context(user, team: Team) -> dict:
     )
     lot_by_player_id = _player_lot_map(auction)
     watchlist_entries = list(
-        TeamWatchlist.objects.filter(team=team)
+        TeamWatchlist.objects.filter(
+            team=team,
+            player__is_eligible_for_auction=True,
+        )
         .select_related("player", "added_by")
         .order_by("priority", "player__base_price", "player__name")
     )
@@ -695,7 +719,11 @@ def _build_owner_dashboard_context(user, team: Team) -> dict:
         "squad_floor_needed": Decimal("10000") * Decimal(effective_slots_remaining),
     }
 
-    available_players_qs = Player.objects.filter(tournament=tournament, is_active=True).exclude(id__in=active_assignment_ids)
+    available_players_qs = Player.objects.filter(
+        tournament=tournament,
+        is_active=True,
+        is_eligible_for_auction=True,
+    ).exclude(id__in=active_assignment_ids)
     if auction:
         available_players_qs = available_players_qs.exclude(
             lots__auction=auction,
@@ -1144,7 +1172,12 @@ def team_edit(request, slug: str, team_id: int):
         if retained_price < 0:
             retained_price = Decimal("0")
 
-        player = get_object_or_404(Player, pk=player_id, tournament=tournament)
+        player = get_object_or_404(
+            Player,
+            pk=player_id,
+            tournament=tournament,
+            is_eligible_for_auction=True,
+        )
 
         sold_exists = AuctionLot.objects.filter(
             auction__tournament=tournament,
@@ -1240,7 +1273,10 @@ def team_edit(request, slug: str, team_id: int):
     ).values_list("player_id", flat=True)
 
     available_players = (
-        Player.objects.filter(tournament=tournament)
+        Player.objects.filter(
+            tournament=tournament,
+            is_eligible_for_auction=True,
+        )
         .exclude(id__in=assigned_ids)
         .exclude(id__in=sold_ids)
         .order_by("name")
@@ -1537,7 +1573,13 @@ def owner_dashboard(request, slug: str, team_id: int):
         except (TypeError, ValueError):
             player_id = 0
 
-        player = get_object_or_404(Player, pk=player_id, tournament=tournament, is_active=True)
+        player = get_object_or_404(
+            Player,
+            pk=player_id,
+            tournament=tournament,
+            is_active=True,
+            is_eligible_for_auction=True,
+        )
         already_assigned = TeamPlayer.objects.filter(
             tournament=tournament,
             player=player,
@@ -1786,7 +1828,18 @@ def export_teams_xlsx(request, slug: str):
 
 @login_required
 def export_players_xlsx(request, slug: str):
-    """Export all tournament players into a single XLSX sheet."""
+    """Export every registered tournament player."""
+    return _export_players_xlsx(request, slug, eligible_only=False)
+
+
+@login_required
+def export_eligible_players_xlsx(request, slug: str):
+    """Export only players who can participate in the auction."""
+    return _export_players_xlsx(request, slug, eligible_only=True)
+
+
+def _export_players_xlsx(request, slug: str, *, eligible_only: bool):
+    """Build a single-sheet player export for the requested eligibility scope."""
 
     try:
         from openpyxl import Workbook
@@ -1802,7 +1855,10 @@ def export_players_xlsx(request, slug: str):
 
     tournament = get_object_or_404(_filter_tournament_qs(Tournament, request.user), slug=slug)
 
-    players = list(Player.objects.filter(tournament=tournament).order_by("name"))
+    players_qs = Player.objects.filter(tournament=tournament)
+    if eligible_only:
+        players_qs = players_qs.filter(is_eligible_for_auction=True)
+    players = list(players_qs.order_by("name"))
 
     auction = getattr(tournament, "auction", None)
 
@@ -1924,7 +1980,8 @@ def export_players_xlsx(request, slug: str):
     wb.save(out)
     out.seek(0)
 
-    filename = f"{tournament.slug}_players.xlsx"
+    scope = "auction_eligible_players" if eligible_only else "all_players"
+    filename = f"{tournament.slug}_{scope}.xlsx"
     response = HttpResponse(
         out.getvalue(),
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1939,7 +1996,10 @@ def lot_manager(request, slug: str):
     auction = _ensure_auction(tournament)
 
     lots = (
-        AuctionLot.objects.filter(auction=auction)
+        AuctionLot.objects.filter(
+            auction=auction,
+            player__is_eligible_for_auction=True,
+        )
         .select_related("player")
         .order_by("lot_no", "lot_order", "id")
     )
@@ -1980,7 +2040,12 @@ def move_lot_player(request, slug: str):
     if target_lot_no < 1:
         return JsonResponse({"ok": False, "error": "Invalid target lot."}, status=400)
 
-    lot = get_object_or_404(AuctionLot, pk=lot_id, auction=auction)
+    lot = get_object_or_404(
+        AuctionLot,
+        pk=lot_id,
+        auction=auction,
+        player__is_eligible_for_auction=True,
+    )
     if lot.status != AuctionLot.Status.PENDING:
         return JsonResponse({"ok": False, "error": "Only pending lots can be moved."}, status=400)
 

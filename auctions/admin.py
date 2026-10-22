@@ -152,9 +152,10 @@ class PlayerAdmin(admin.ModelAdmin):
         "base_price",
         "reserve_price",
         "is_active",
+        "is_eligible_for_auction",
         "updated_at",
     )
-    list_filter = ("is_active", "role", "tournament__season_year", "tournament")
+    list_filter = ("is_active", "is_eligible_for_auction", "role", "tournament__season_year", "tournament")
     search_fields = ("name", "phone", "city", "tournament__name")
     readonly_fields = (
         "created_at",
@@ -165,7 +166,19 @@ class PlayerAdmin(admin.ModelAdmin):
     autocomplete_fields = ("tournament",)
 
     fieldsets = (
-        ("Player", {"fields": ("tournament", "name", "is_active", "photo", "photo_preview")}),
+        (
+            "Player",
+            {
+                "fields": (
+                    "tournament",
+                    "name",
+                    "is_active",
+                    "is_eligible_for_auction",
+                    "photo",
+                    "photo_preview",
+                )
+            },
+        ),
         (
             "Registration",
             {

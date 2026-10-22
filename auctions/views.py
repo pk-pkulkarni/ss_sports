@@ -106,13 +106,15 @@ def _assigned_player_ids_qs(tournament: Tournament):
 
 
 def _withdraw_open_lots_for_assigned_players(auction: Auction) -> int:
-    """If a player is already assigned to a team, they should not be auctioned."""
+    """Withdraw open lots whose players can no longer participate in the auction."""
 
     assigned_player_ids = _assigned_player_ids_qs(auction.tournament)
 
     return AuctionLot.objects.filter(
         auction=auction,
-        player_id__in=assigned_player_ids,
+    ).filter(
+        Q(player_id__in=assigned_player_ids)
+        | Q(player__is_eligible_for_auction=False)
     ).exclude(
         status__in=[AuctionLot.Status.SOLD, AuctionLot.Status.WITHDRAWN]
     ).update(status=AuctionLot.Status.WITHDRAWN)
@@ -167,6 +169,7 @@ def _restricted_lot_is_incomplete(auction: Auction, lot_no: int) -> bool:
         AuctionLot.objects.filter(
             auction=auction,
             lot_no=lot_no,
+            player__is_eligible_for_auction=True,
             status__in=[
                 AuctionLot.Status.PENDING,
                 AuctionLot.Status.RUNNING,
@@ -183,6 +186,7 @@ def _relist_unsold_lot_if_needed(auction: Auction, lot_no: int) -> int:
     lot_open_exists = AuctionLot.objects.filter(
         auction=auction,
         lot_no=lot_no,
+        player__is_eligible_for_auction=True,
         status__in=[AuctionLot.Status.PENDING, AuctionLot.Status.RUNNING],
     ).exclude(player_id__in=assigned_player_ids).exists()
     if lot_open_exists:
@@ -193,6 +197,7 @@ def _relist_unsold_lot_if_needed(auction: Auction, lot_no: int) -> int:
             auction=auction,
             lot_no=lot_no,
             status=AuctionLot.Status.UNSOLD,
+            player__is_eligible_for_auction=True,
         ).exclude(player_id__in=assigned_player_ids).values_list("id", flat=True)
     )
     if not lot_unsold_ids:
@@ -279,7 +284,10 @@ def _current_lot_for_auction(auction: Auction):
     _relist_restricted_unsold_if_needed(auction)
     restricted_lot_no, auction_rules_config = _active_restricted_lot(auction)
 
-    lot_scope = AuctionLot.objects.filter(auction=auction)
+    lot_scope = AuctionLot.objects.filter(
+        auction=auction,
+        player__is_eligible_for_auction=True,
+    )
     if restricted_lot_no:
         lot_scope = lot_scope.filter(lot_no=restricted_lot_no)
 
@@ -938,6 +946,10 @@ def place_bid(request, lot_id: int):
     if lot.status not in [AuctionLot.Status.PENDING, AuctionLot.Status.RUNNING]:
         return JsonResponse({"ok": False, "error": "Lot is not open for bidding."}, status=400)
 
+    if not lot.player.is_eligible_for_auction:
+        AuctionLot.objects.filter(pk=lot.pk).update(status=AuctionLot.Status.WITHDRAWN)
+        return JsonResponse({"ok": False, "error": "Player is not eligible for the auction."}, status=400)
+
     # Safety: if player is already assigned to a team (retained), withdraw lot and block bidding.
     assigned_exists = (
         TeamPlayer.objects.filter(tournament=lot.auction.tournament, player_id=lot.player_id)
@@ -1090,6 +1102,10 @@ def mark_sold(request, lot_id: int):
     if lot.status in [AuctionLot.Status.SOLD, AuctionLot.Status.UNSOLD, AuctionLot.Status.WITHDRAWN]:
         return JsonResponse({"ok": False, "error": "Lot already closed."}, status=400)
 
+    if not lot.player.is_eligible_for_auction:
+        AuctionLot.objects.filter(pk=lot.pk).update(status=AuctionLot.Status.WITHDRAWN)
+        return JsonResponse({"ok": False, "error": "Player is not eligible for the auction."}, status=400)
+
     # Safety: don't allow selling a player that is already assigned/retained.
     assigned_exists = (
         TeamPlayer.objects.filter(tournament=lot.auction.tournament, player_id=lot.player_id)
@@ -1211,13 +1227,17 @@ def mark_sold(request, lot_id: int):
 @require_POST
 @csrf_exempt
 def mark_unsold(request, lot_id: int):
-    lot = get_object_or_404(AuctionLot.objects.select_related("auction__tournament"), pk=lot_id)
+    lot = get_object_or_404(AuctionLot.objects.select_related("auction__tournament", "player"), pk=lot_id)
 
     if not can_manage_tournament(request.user, lot.auction.tournament):
         return JsonResponse({"ok": False, "error": "Forbidden"}, status=403)
 
     if lot.status in [AuctionLot.Status.SOLD, AuctionLot.Status.UNSOLD, AuctionLot.Status.WITHDRAWN]:
         return JsonResponse({"ok": False, "error": "Lot already closed."}, status=400)
+
+    if not lot.player.is_eligible_for_auction:
+        AuctionLot.objects.filter(pk=lot.pk).update(status=AuctionLot.Status.WITHDRAWN)
+        return JsonResponse({"ok": False, "error": "Player is not eligible for the auction."}, status=400)
 
     # Safety: if player is already assigned/retained, withdraw and block marking UNSOLD.
     assigned_exists = (
@@ -1294,7 +1314,11 @@ def next_lot(request, lot_id: int):
     restricted_lot_no, _rules = _active_restricted_lot(lot.auction)
 
     qs = (
-        AuctionLot.objects.filter(auction=lot.auction, status=AuctionLot.Status.PENDING)
+        AuctionLot.objects.filter(
+            auction=lot.auction,
+            status=AuctionLot.Status.PENDING,
+            player__is_eligible_for_auction=True,
+        )
         .select_related("player")
     )
     if restricted_lot_no:
@@ -1442,6 +1466,7 @@ def auction_unsold_list(request, auction_id: int):
     qs = (
         AuctionLot.objects.filter(
             auction=auction,
+            player__is_eligible_for_auction=True,
             status__in=[
                 AuctionLot.Status.PENDING,
                 AuctionLot.Status.RUNNING,
@@ -1571,9 +1596,11 @@ def reopen_unsold(request, auction_id: int):
     # Reopen UNSOLD lots back to PENDING
     assigned_player_ids = _assigned_player_ids_qs(auction.tournament)
 
-    qs = AuctionLot.objects.filter(auction=auction, status=AuctionLot.Status.UNSOLD).exclude(
-        player_id__in=assigned_player_ids
-    )
+    qs = AuctionLot.objects.filter(
+        auction=auction,
+        status=AuctionLot.Status.UNSOLD,
+        player__is_eligible_for_auction=True,
+    ).exclude(player_id__in=assigned_player_ids)
     unsold_ids = list(qs.values_list("id", flat=True))
 
     reopened = qs.update(status=AuctionLot.Status.PENDING)

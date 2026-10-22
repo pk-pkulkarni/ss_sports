@@ -9,6 +9,52 @@ from tournaments.models import Tournament
 
 from .models import Auction, AuctionEvent, AuctionLot, Bid, Player, Team, TeamPlayer
 from .rules import AUCTION_TYPE_RULE_BASED, RULE_LOT1, RULE_LOT1_AND_LOT2, RULE_PRICE_CAPS
+from .services import generate_lots_from_active_players, generate_random_lots_from_active_players
+
+
+class AuctionEligibilityTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username="eligibility-owner", password="pass123")
+        self.tournament = Tournament.objects.create(
+            organizer=self.user,
+            name="Eligibility Cup",
+            season_year=2026,
+        )
+        self.auction = Auction.objects.create(
+            tournament=self.tournament,
+            name="Main Auction",
+            code="SS-ELIGIBLE",
+        )
+        self.eligible = Player.objects.create(
+            tournament=self.tournament,
+            name="Eligible Player",
+            is_active=True,
+            is_eligible_for_auction=True,
+        )
+        self.ineligible = Player.objects.create(
+            tournament=self.tournament,
+            name="Registered Outside Auction",
+            is_active=True,
+            is_eligible_for_auction=False,
+        )
+
+    def test_sequential_lot_generation_only_includes_eligible_players(self):
+        created, _skipped = generate_lots_from_active_players(self.auction)
+
+        self.assertEqual(created, 1)
+        self.assertEqual(
+            list(AuctionLot.objects.filter(auction=self.auction).values_list("player_id", flat=True)),
+            [self.eligible.id],
+        )
+
+    def test_random_lot_generation_only_includes_eligible_players(self):
+        created, _skipped = generate_random_lots_from_active_players(self.auction, max_lots=4)
+
+        self.assertEqual(created, 1)
+        self.assertEqual(
+            list(AuctionLot.objects.filter(auction=self.auction).values_list("player_id", flat=True)),
+            [self.eligible.id],
+        )
 
 
 class AuctionRulesTests(TestCase):

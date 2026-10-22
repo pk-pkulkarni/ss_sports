@@ -36,6 +36,7 @@
         data-player-bat-avg="{{ p.stats.bat_avg|default:'' }}"
         data-player-bat-sr="{{ p.stats.bat_sr|default:'' }}"
         data-player-active="{{ p.is_active|yesno:'1,0' }}"
+        data-player-eligible="{{ p.is_eligible_for_auction|yesno:'1,0' }}"
       >Edit</button>
 
       {% if p.id not in sold_player_ids and p.id not in assigned_player_ids %}
@@ -75,6 +76,11 @@
           <span class="badge-soft badge-yes">Active</span>
         {% else %}
           <span class="badge-soft badge-no">Inactive</span>
+        {% endif %}
+        {% if p.is_eligible_for_auction %}
+          <span class="badge-soft badge-yes">Auction eligible</span>
+        {% else %}
+          <span class="badge-soft badge-no">Not in auction</span>
         {% endif %}
       </div>
     </div>
