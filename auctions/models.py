@@ -258,8 +258,8 @@ class Player(models.Model):
     class Gender(models.TextChoices):
         MALE = "MALE", "Male"
         FEMALE = "FEMALE", "Female"
-        OTHER = "OTHER", "Other"
-        NA = "NA", "Prefer not to say"
+        # OTHER = "OTHER", "Other"
+        # NA = "NA", "Prefer not to say"
 
     class JerseySize(models.TextChoices):
         XS = "XS", JERSEY_SIZE_CHOICE_LABELS["XS"]

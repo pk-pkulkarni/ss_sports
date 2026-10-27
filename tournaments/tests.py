@@ -140,6 +140,28 @@ class PlayerBasePriceFormTests(TestCase):
         self.assertEqual(jersey_size_number(Player.JerseySize.XXL), 44)
 
 
+class PlayerExportSheetTests(TestCase):
+    def test_complete_registrations_export_to_exactly_four_sheets(self):
+        organizer = get_user_model().objects.create_user(username="exporter", password="password")
+        tournament = Tournament.objects.create(organizer=organizer, name="Export Cup", season_year=2026)
+        for name, gender, age in (
+            ("Man", Player.Gender.MALE, 14),
+            ("Woman", Player.Gender.FEMALE, 14),
+            ("Boy", Player.Gender.MALE, 13),
+            ("Girl", Player.Gender.FEMALE, 12),
+        ):
+            Player.objects.create(tournament=tournament, name=name, gender=gender, age=age)
+        self.client.force_login(organizer)
+
+        response = self.client.get(reverse("players_export_xlsx", kwargs={"slug": tournament.slug}))
+        from openpyxl import load_workbook
+
+        workbook = load_workbook(BytesIO(response.content), read_only=True)
+        self.assertEqual(workbook.sheetnames, ["Men", "Women", "Boys", "Girls"])
+        for sheet, name in zip(workbook, ("Man", "Woman", "Boy", "Girl")):
+            self.assertEqual([row[0] for row in list(sheet.values)[1:]], [name])
+
+
 class TeamOwnerDashboardTests(TestCase):
     def setUp(self):
         User = get_user_model()
@@ -333,6 +355,8 @@ class TeamOwnerDashboardTests(TestCase):
         player = Player.objects.create(
             tournament=self.tournament,
             name="Jersey Export Player",
+            gender=Player.Gender.MALE,
+            age=25,
             phone="9123456780",
             jersey_name="EXPORTER",
             jersey_no=27,
@@ -349,7 +373,7 @@ class TeamOwnerDashboardTests(TestCase):
         from openpyxl import load_workbook
 
         workbook = load_workbook(BytesIO(response.content), read_only=True)
-        rows = list(workbook.active.iter_rows(values_only=True))
+        rows = list(workbook["Men"].iter_rows(values_only=True))
         self.assertEqual(
             rows[0],
             ("Name", "Contact", "Jersey Name", "Jersey No", "Jersey Size", "Jersey Size No"),
@@ -382,14 +406,50 @@ class TeamOwnerDashboardTests(TestCase):
 
         from openpyxl import load_workbook
 
-        all_rows = list(load_workbook(BytesIO(all_response.content), read_only=True).active.iter_rows(values_only=True))
+        all_workbook = load_workbook(BytesIO(all_response.content), read_only=True)
+        all_rows = [row for sheet in all_workbook for row in list(sheet.iter_rows(values_only=True))[1:]]
         eligible_rows = list(
             load_workbook(BytesIO(eligible_response.content), read_only=True).active.iter_rows(values_only=True)
         )
-        self.assertIn(eligible.name, {row[0] for row in all_rows[1:]})
-        self.assertIn(ineligible.name, {row[0] for row in all_rows[1:]})
+        self.assertIn(eligible.name, {row[0] for row in all_rows})
+        self.assertIn(ineligible.name, {row[0] for row in all_rows})
         self.assertIn(eligible.name, {row[0] for row in eligible_rows[1:]})
         self.assertNotIn(ineligible.name, {row[0] for row in eligible_rows[1:]})
+
+    def test_all_player_export_groups_gender_and_age_and_keeps_incomplete_records(self):
+        today = date.today()
+        cases = (
+            ("Adult Man", Player.Gender.MALE, 25, "Men"),
+            ("Adult Woman", Player.Gender.FEMALE, 25, "Women"),
+            ("Young Boy", Player.Gender.MALE, 12, "Boys"),
+            ("Thirteen Year Old Girl", Player.Gender.FEMALE, 13, "Girls"),
+        )
+        for name, gender, age, _ in cases:
+            Player.objects.create(tournament=self.tournament, name=name, gender=gender, age=age)
+        Player.objects.create(
+            tournament=self.tournament,
+            name="DOB Takes Priority",
+            gender=Player.Gender.MALE,
+            age=10,
+            dob=date(today.year - 20, 1, 1),
+        )
+        Player.objects.create(tournament=self.tournament, name="Missing Age", gender=Player.Gender.FEMALE)
+        self.client.force_login(self.organizer)
+
+        response = self.client.get(reverse("players_export_xlsx", kwargs={"slug": self.tournament.slug}))
+        self.assertEqual(response.status_code, 200)
+        from openpyxl import load_workbook
+
+        workbook = load_workbook(BytesIO(response.content), read_only=True)
+        self.assertEqual(workbook.sheetnames, ["Men", "Women", "Boys", "Girls", "Uncategorized"])
+        names = {
+            sheet.title: {row[0] for row in list(sheet.iter_rows(values_only=True))[1:]}
+            for sheet in workbook
+        }
+        for name, _, _, sheet in cases:
+            self.assertIn(name, names[sheet])
+        self.assertIn("DOB Takes Priority", names["Men"])
+        self.assertIn("Missing Age", names["Uncategorized"])
 
     def test_owner_dashboard_and_lot_manager_hide_ineligible_players(self):
         ineligible = Player.objects.create(

@@ -1839,7 +1839,7 @@ def export_eligible_players_xlsx(request, slug: str):
 
 
 def _export_players_xlsx(request, slug: str, *, eligible_only: bool):
-    """Build a single-sheet player export for the requested eligibility scope."""
+    """Build the player export for the requested eligibility scope."""
 
     try:
         from openpyxl import Workbook
@@ -1851,6 +1851,7 @@ def _export_players_xlsx(request, slug: str, *, eligible_only: bool):
             content_type="text/plain",
         )
 
+    from datetime import date
     from io import BytesIO
 
     tournament = get_object_or_404(_filter_tournament_qs(Tournament, request.user), slug=slug)
@@ -1860,121 +1861,53 @@ def _export_players_xlsx(request, slug: str, *, eligible_only: bool):
         players_qs = players_qs.filter(is_eligible_for_auction=True)
     players = list(players_qs.order_by("name"))
 
-    auction = getattr(tournament, "auction", None)
-
-    lot_by_player_id = {}
-    if auction:
-        lots = (
-            AuctionLot.objects.filter(auction=auction)
-            .select_related("sold_to_team")
-            .order_by("lot_no", "lot_order", "id")
-        )
-        for lot in lots:
-            lot_by_player_id[lot.player_id] = lot
-
-    tp_by_player_id = {
-        tp.player_id: tp
-        for tp in TeamPlayer.objects.filter(tournament=tournament)
-        .select_related("team")
-        .order_by("player__name")
-    }
-
     wb = Workbook()
-    ws = wb.active
-    ws.title = "Players"
+    wb.active.title = "Players" if eligible_only else "Men"
+    sheets = {wb.active.title: wb.active}
+    if not eligible_only:
+        for title in ("Women", "Boys", "Girls"):
+            sheets[title] = wb.create_sheet(title)
 
-    headers = [
-        "Name",
-        # "Role",
-        # "City",
-        # "Age",
-        "Contact",
-        "Jersey Name",
-        "Jersey No",
-        "Jersey Size",
-        "Jersey Size No",
-        # "Active",
-        # "Base Price",
-        # "Reserve Price",
-        # "Team",
-        # "Designation",
-        # "Lot No",
-        # "Lot Status",
-        # "Sold To",
-        # "Sold Price",
-        # "Batting Style",
-        # "Bowling Style",
-        # "Notes",
-        # "Stats",
-    ]
-    ws.append(headers)
+    headers = ["Name", "Contact", "Jersey Name", "Jersey No", "Jersey Size", "Jersey Size No"]
+    for ws in sheets.values():
+        ws.append(headers)
 
     for p in players:
-        # lot = lot_by_player_id.get(p.id)
-        # tp = tp_by_player_id.get(p.id)
-        #
-        # stats_val = ""
-        # if p.stats:
-        #     try:
-        #         stats_val = json.dumps(p.stats, ensure_ascii=False)
-        #     except Exception:
-        #         stats_val = str(p.stats)
-
+        if eligible_only:
+            ws = sheets["Players"]
+        else:
+            # DOB is authoritative when present; age is a fallback for legacy records.
+            age = p.age
+            if p.dob:
+                today = date.today()
+                age = today.year - p.dob.year - ((today.month, today.day) < (p.dob.month, p.dob.day))
+            if age is None or p.gender not in (Player.Gender.MALE, Player.Gender.FEMALE):
+                # Retain incomplete legacy registrations in the all-player download.
+                if "Uncategorized" not in sheets:
+                    sheets["Uncategorized"] = wb.create_sheet("Uncategorized")
+                    sheets["Uncategorized"].append(headers)
+                ws = sheets["Uncategorized"]
+            elif p.gender == Player.Gender.MALE:
+                ws = sheets["Men" if age > 13 else "Boys"]
+            else:
+                ws = sheets["Women" if age > 13 else "Girls"]
         ws.append(
             [
                 p.name,
-                # p.get_role_display() if p.role else "",
-                # p.city or "",
-                # p.age or "",
                 p.phone or "",
                 p.jersey_name or "",
                 p.jersey_no if p.jersey_no is not None else "",
                 jersey_size_label(p.jersey_size),
                 jersey_size_number(p.jersey_size) or "",
-                # "Yes" if p.is_active else "No",
-                # p.base_price or 0,
-                # p.reserve_price or 0,
-                # tp.team.name if tp else "",
-                # tp.get_designation_display() if tp else "",
-                # lot.lot_no if lot else "",
-                # lot.get_status_display() if lot else "",
-                # lot.sold_to_team.name if lot and lot.sold_to_team_id else "",
-                # lot.sold_price if lot and lot.sold_price is not None else "",
-                # p.batting_style or "",
-                # p.bowling_style or "",
-                # p.notes or "",
-                # stats_val,
             ]
         )
 
     # Basic formatting
-    ws.freeze_panes = "A2"
-    widths = [
-        28,  # Name
-        16,  # Contact
-        18,  # Jersey Name
-        12,  # Jersey No
-        14,  # Jersey Size
-        16,  # Jersey Size No
-        # 14,  # Role
-        # 18,  # City
-        # 8,   # Age
-        # 8,   # Active
-        # 12,  # Base
-        # 12,  # Reserve
-        # 20,  # Team
-        # 14,  # Designation
-        # 8,   # Lot No
-        # 14,  # Lot Status
-        # 20,  # Sold To
-        # 12,  # Sold Price
-        # 16,  # Batting
-        # 16,  # Bowling
-        # 26,  # Notes
-        # 44,  # Stats
-    ]
-    for idx, w in enumerate(widths, start=1):
-        ws.column_dimensions[get_column_letter(idx)].width = w
+    widths = [28, 16, 18, 12, 14, 16]
+    for ws in sheets.values():
+        ws.freeze_panes = "A2"
+        for idx, w in enumerate(widths, start=1):
+            ws.column_dimensions[get_column_letter(idx)].width = w
 
     out = BytesIO()
     wb.save(out)

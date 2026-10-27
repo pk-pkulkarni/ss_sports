@@ -23,6 +23,7 @@ from django.urls import path
 from . import views as config_views
 from tournaments import views as tournament_views
 from auctions import views as auction_views
+from users import views as user_views
 
 
 urlpatterns = [
@@ -39,6 +40,7 @@ urlpatterns = [
         name="login",
     ),
     path("logout/", auth_views.LogoutView.as_view(next_page="landing"), name="logout"),
+    path("password/change/", user_views.change_password, name="change_password"),
 
     # Admin
     path("admin/", admin.site.urls),
