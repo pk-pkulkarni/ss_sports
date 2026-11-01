@@ -1868,19 +1868,22 @@ def _export_players_xlsx(request, slug: str, *, eligible_only: bool):
         for title in ("Women", "Boys", "Girls"):
             sheets[title] = wb.create_sheet(title)
 
-    headers = ["Name", "Contact", "Jersey Name", "Jersey No", "Jersey Size", "Jersey Size No"]
+    headers = [
+        "Name", "Contact", "Building", "Flat No", "DOB", "Completed Age",
+        "Jersey Name", "Jersey No", "Jersey Size", "Jersey Size No",
+    ]
     for ws in sheets.values():
         ws.append(headers)
 
     for p in players:
+        # DOB stays current as birthdays pass; legacy records use their saved age.
+        age = p.age
+        if p.dob:
+            today = date.today()
+            age = today.year - p.dob.year - ((today.month, today.day) < (p.dob.month, p.dob.day))
         if eligible_only:
             ws = sheets["Players"]
         else:
-            # DOB is authoritative when present; age is a fallback for legacy records.
-            age = p.age
-            if p.dob:
-                today = date.today()
-                age = today.year - p.dob.year - ((today.month, today.day) < (p.dob.month, p.dob.day))
             if age is None or p.gender not in (Player.Gender.MALE, Player.Gender.FEMALE):
                 # Retain incomplete legacy registrations in the all-player download.
                 if "Uncategorized" not in sheets:
@@ -1895,6 +1898,10 @@ def _export_players_xlsx(request, slug: str, *, eligible_only: bool):
             [
                 p.name,
                 p.phone or "",
+                p.building or "",
+                p.flat_no or "",
+                p.dob.isoformat() if p.dob else "",
+                age if age is not None else "",
                 p.jersey_name or "",
                 p.jersey_no if p.jersey_no is not None else "",
                 jersey_size_label(p.jersey_size),
@@ -1903,7 +1910,7 @@ def _export_players_xlsx(request, slug: str, *, eligible_only: bool):
         )
 
     # Basic formatting
-    widths = [28, 16, 18, 12, 14, 16]
+    widths = [28, 16, 14, 14, 14, 16, 18, 12, 14, 16]
     for ws in sheets.values():
         ws.freeze_panes = "A2"
         for idx, w in enumerate(widths, start=1):

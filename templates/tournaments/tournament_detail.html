@@ -304,6 +304,7 @@
                 <a class="btn btn-outline-light" href="{% url 'players_export_xlsx' slug=tournament.slug %}">Export All Players</a>
                 <a class="btn btn-outline-light" href="{% url 'eligible_players_export_xlsx' slug=tournament.slug %}">Export Auction-Eligible Players</a>
                 <input id="q" class="control" style="min-width:260px;" placeholder="Search player name…"/>
+                <span class="muted align-self-center" id="resultCount" aria-live="polite" style="font-size:.95rem;">Showing {{ total_players }} of {{ total_players }} players</span>
                 <select id="role" class="control">
                     <option value="">All roles</option>
                     <option value="BAT">Batsman</option>
@@ -327,9 +328,6 @@
             {% endfor %}
         </div>
 
-        <div class="divider"></div>
-
-        <div class="muted" id="resultCount" style="font-size:.95rem;"></div>
     </div>
     {% if can_manage %}
 

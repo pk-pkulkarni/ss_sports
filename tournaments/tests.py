@@ -352,11 +352,16 @@ class TeamOwnerDashboardTests(TestCase):
         self.assertNotContains(response, "player.photo")
 
     def test_player_export_includes_contact_and_both_jersey_size_formats(self):
+        today = date.today()
+        dob = date(today.year - 25, today.month, today.day)
         player = Player.objects.create(
             tournament=self.tournament,
             name="Jersey Export Player",
             gender=Player.Gender.MALE,
             age=25,
+            dob=dob,
+            building="D-3",
+            flat_no="1204",
             phone="9123456780",
             jersey_name="EXPORTER",
             jersey_no=27,
@@ -376,12 +381,15 @@ class TeamOwnerDashboardTests(TestCase):
         rows = list(workbook["Men"].iter_rows(values_only=True))
         self.assertEqual(
             rows[0],
-            ("Name", "Contact", "Jersey Name", "Jersey No", "Jersey Size", "Jersey Size No"),
+            (
+                "Name", "Contact", "Building", "Flat No", "DOB", "Completed Age",
+                "Jersey Name", "Jersey No", "Jersey Size", "Jersey Size No",
+            ),
         )
         exported = next(row for row in rows[1:] if row[0] == player.name)
         self.assertEqual(
             exported,
-            (player.name, "9123456780", "EXPORTER", 27, "2XL", 44),
+            (player.name, "9123456780", "D-3", "1204", dob.isoformat(), 25, "EXPORTER", 27, "2XL", 44),
         )
 
     def test_eligible_player_export_excludes_ineligible_registrations(self):
@@ -415,6 +423,7 @@ class TeamOwnerDashboardTests(TestCase):
         self.assertIn(ineligible.name, {row[0] for row in all_rows})
         self.assertIn(eligible.name, {row[0] for row in eligible_rows[1:]})
         self.assertNotIn(ineligible.name, {row[0] for row in eligible_rows[1:]})
+        self.assertEqual(eligible_rows[0][2:6], ("Building", "Flat No", "DOB", "Completed Age"))
 
     def test_all_player_export_groups_gender_and_age_and_keeps_incomplete_records(self):
         today = date.today()
