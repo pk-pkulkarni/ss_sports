@@ -52,7 +52,7 @@ class PlayerBasePriceFormTests(TestCase):
             data={
                 "tournament": self.tournament.pk,
                 "name": "Registered Player",
-                "gender": Player.Gender.MALE,
+                "gender": Player.Gender.FEMALE,
                 "building": "D-1",
                 "flat_no": "101",
                 "dob": "2000-01-01",
@@ -79,7 +79,7 @@ class PlayerBasePriceFormTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
         player = form.save()
         self.assertEqual(player.base_price, DEFAULT_PLAYER_BASE_PRICE)
-        self.assertTrue(player.is_eligible_for_auction)
+        self.assertFalse(player.is_eligible_for_auction)
 
     def _registration_form(self, *, name, gender, age):
         today = date.today()
@@ -128,6 +128,20 @@ class PlayerBasePriceFormTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
         self.assertFalse(form.save().is_eligible_for_auction)
 
+    def test_public_registration_rejects_men_older_than_13(self):
+        form = self._registration_form(name="Adult Man", gender=Player.Gender.MALE, age=14)
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("Registration for men older than 13 is now closed.", form.non_field_errors())
+
+        response = self.client.post(
+            reverse("landing"),
+            data={**form.data, "payment_screenshot": form.files["payment_screenshot"]},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Registration for men older than 13 is now closed.")
+        self.assertFalse(Player.objects.filter(name="Adult Man").exists())
+
     def test_jersey_size_choices_include_numeric_mapping_and_extended_sizes(self):
         choices = dict(PublicPlayerRegistrationForm().fields["jersey_size"].choices)
 
@@ -141,6 +155,19 @@ class PlayerBasePriceFormTests(TestCase):
 
 
 class PlayerExportSheetTests(TestCase):
+    def test_all_player_export_orders_each_sheet_by_descending_id(self):
+        organizer = get_user_model().objects.create_user(username="exporter", password="password")
+        tournament = Tournament.objects.create(organizer=organizer, name="Export Cup", season_year=2026)
+        Player.objects.create(tournament=tournament, name="Zulu", gender=Player.Gender.MALE, age=25)
+        Player.objects.create(tournament=tournament, name="Alpha", gender=Player.Gender.MALE, age=25)
+        self.client.force_login(organizer)
+
+        response = self.client.get(reverse("players_export_xlsx", kwargs={"slug": tournament.slug}))
+        from openpyxl import load_workbook
+
+        workbook = load_workbook(BytesIO(response.content), read_only=True)
+        self.assertEqual([row[0] for row in list(workbook["Men"].values)[1:]], ["Alpha", "Zulu"])
+
     def test_complete_registrations_export_to_exactly_four_sheets(self):
         organizer = get_user_model().objects.create_user(username="exporter", password="password")
         tournament = Tournament.objects.create(organizer=organizer, name="Export Cup", season_year=2026)

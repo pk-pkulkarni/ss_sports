@@ -1859,7 +1859,7 @@ def _export_players_xlsx(request, slug: str, *, eligible_only: bool):
     players_qs = Player.objects.filter(tournament=tournament)
     if eligible_only:
         players_qs = players_qs.filter(is_eligible_for_auction=True)
-    players = list(players_qs.order_by("name"))
+    players = list(players_qs.order_by("name" if eligible_only else "-id"))
 
     wb = Workbook()
     wb.active.title = "Players" if eligible_only else "Men"

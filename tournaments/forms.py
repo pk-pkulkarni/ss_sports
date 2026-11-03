@@ -304,6 +304,16 @@ class PublicPlayerRegistrationForm(forms.ModelForm):
             elif isinstance(f.widget, (forms.TextInput, forms.DateInput, forms.NumberInput)):
                 f.widget.attrs.setdefault("class", "form-control")
 
+    def clean(self):
+        cleaned = super().clean()
+        dob = cleaned.get("dob")
+        if cleaned.get("gender") == Player.Gender.MALE and dob:
+            today = date.today()
+            age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+            if age > 13:
+                raise forms.ValidationError("Registration for men older than 13 is now closed.")
+        return cleaned
+
     def save(self, commit=True):
         instance = super().save(commit=False)
 
