@@ -307,11 +307,11 @@ class PublicPlayerRegistrationForm(forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
         dob = cleaned.get("dob")
-        if cleaned.get("gender") == Player.Gender.MALE and dob:
+        if cleaned.get("gender") in (Player.Gender.MALE, Player.Gender.FEMALE) and dob:
             today = date.today()
             age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
             if age > 13:
-                raise forms.ValidationError("Registration for men older than 13 is now closed.")
+                raise forms.ValidationError("Registration is closed for players older than 13.")
         return cleaned
 
     def save(self, commit=True):
@@ -323,8 +323,8 @@ class PublicPlayerRegistrationForm(forms.ModelForm):
             today = date.today()
             instance.age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
 
-        # The public form registers every division, while only men older than
-        # 13 participate in the auction. Registrants cannot override this.
+        # Public registration is limited to children aged 13 or younger.
+        # Registrants cannot override auction eligibility.
         instance.is_eligible_for_auction = (
             instance.gender == Player.Gender.MALE
             and instance.age is not None

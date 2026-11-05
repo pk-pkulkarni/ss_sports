@@ -55,7 +55,7 @@ class PlayerBasePriceFormTests(TestCase):
                 "gender": Player.Gender.FEMALE,
                 "building": "D-1",
                 "flat_no": "101",
-                "dob": "2000-01-01",
+                "dob": date.today().replace(year=date.today().year - 12).isoformat(),
                 "phone": "9999999999",
                 "jersey_no": 7,
                 "jersey_name": "REG",
@@ -116,8 +116,8 @@ class PlayerBasePriceFormTests(TestCase):
             },
         )
 
-    def test_public_registration_marks_women_as_not_auction_eligible(self):
-        form = self._registration_form(name="Adult Woman", gender=Player.Gender.FEMALE, age=25)
+    def test_public_registration_marks_13_year_old_girl_as_not_auction_eligible(self):
+        form = self._registration_form(name="Junior Girl", gender=Player.Gender.FEMALE, age=13)
 
         self.assertTrue(form.is_valid(), form.errors)
         self.assertFalse(form.save().is_eligible_for_auction)
@@ -132,15 +132,29 @@ class PlayerBasePriceFormTests(TestCase):
         form = self._registration_form(name="Adult Man", gender=Player.Gender.MALE, age=14)
 
         self.assertFalse(form.is_valid())
-        self.assertIn("Registration for men older than 13 is now closed.", form.non_field_errors())
+        self.assertIn("Registration is closed for players older than 13.", form.non_field_errors())
 
         response = self.client.post(
             reverse("landing"),
             data={**form.data, "payment_screenshot": form.files["payment_screenshot"]},
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Registration for men older than 13 is now closed.")
+        self.assertContains(response, "Registration is closed for players older than 13.")
         self.assertFalse(Player.objects.filter(name="Adult Man").exists())
+
+    def test_public_registration_rejects_women_older_than_13(self):
+        form = self._registration_form(name="Adult Woman", gender=Player.Gender.FEMALE, age=14)
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("Registration is closed for players older than 13.", form.non_field_errors())
+
+        response = self.client.post(
+            reverse("landing"),
+            data={**form.data, "payment_screenshot": form.files["payment_screenshot"]},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Registration is closed for players older than 13.")
+        self.assertFalse(Player.objects.filter(name="Adult Woman").exists())
 
     def test_jersey_size_choices_include_numeric_mapping_and_extended_sizes(self):
         choices = dict(PublicPlayerRegistrationForm().fields["jersey_size"].choices)
