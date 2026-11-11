@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
 
@@ -11,6 +12,13 @@ RULE_LOT1_AND_LOT2 = "lot1_and_lot2_must_sell"
 RULE_PRICE_CAPS = "price_caps"
 
 PRICE_CAP_VALUES = (700000, 500000, 400000)
+
+
+def next_bid_amount(current: Decimal) -> Decimal:
+    """Use ₹10,000 steps below ₹3 lakh and ₹20,000 steps from ₹3 lakh."""
+    if current < Decimal("300000"):
+        return current + Decimal("10000")
+    return current + Decimal("20000")
 
 
 def _positive_int(value: Any) -> int | None:

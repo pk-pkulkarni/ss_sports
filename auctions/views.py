@@ -24,39 +24,8 @@ from .models import (
     AudiencePrediction,
     AudienceReaction,
 )
-from .rules import PRICE_CAP_VALUES, normalize_auction_rules
+from .rules import PRICE_CAP_VALUES, next_bid_amount, normalize_auction_rules
 from .templatetags.inr import inr as inr_format
-
-
-# ------------------ Increment Rules ------------------
-
-def _allowed_next_amount(current: Decimal) -> Decimal:
-    """
-    Enforce your rules:
-      < 1L        -> +10k
-      1L to < 4L  -> +20k
-      >= 4L       -> +50k
-
-    Notes:
-      - current is the current highest amount (or base snapshot if no bids)
-      - returns the ONLY allowed next amount (MVP strict)
-    """
-    ten_k = Decimal("10000")
-    one_l = Decimal("100000")
-    four_l = Decimal("400000")
-
-    if current < one_l:
-        return current + ten_k
-
-    if one_l <= current < four_l:
-        return current + Decimal("20000")
-
-    # after 4L, +50k
-    if current >= four_l:
-        return current + Decimal("50000")
-
-    # fallback
-    return current + Decimal("20000")
 
 
 def _get_current_highest(lot: AuctionLot) -> Decimal:
@@ -472,7 +441,7 @@ def _serialize_stage_lot(lot: AuctionLot | None) -> dict | None:
         "current_bid": str(current_bid or 0),
         "current_bid_display": _format_amount(current_bid or 0),
         "next_bid_display": _format_amount(
-            lot.base_price_snapshot if not valid_bids else _allowed_next_amount(current_bid)
+            lot.base_price_snapshot if not valid_bids else next_bid_amount(current_bid)
         ),
         "leading_team": team_payload,
         "bid_count": len(valid_bids),
@@ -987,7 +956,7 @@ def place_bid(request, lot_id: int):
             next_amount = Decimal(lot.base_price_snapshot or 0)
         else:
             current = Decimal(top_amount)
-            next_amount = _allowed_next_amount(current)
+            next_amount = next_bid_amount(current)
 
         # OPTIONAL (strict): ensure team has enough purse_remaining if set
         # If purse_total is 0, we treat it as not configured yet and allow bidding.

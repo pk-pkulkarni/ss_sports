@@ -33,6 +33,7 @@ from auctions.rules import (
     RULE_LOT1_AND_LOT2,
     RULE_PRICE_CAPS,
     default_auction_rules,
+    next_bid_amount,
     normalize_auction_rules,
 )
 from auctions.services import (
@@ -288,12 +289,7 @@ def _next_bid_amount(lot: AuctionLot) -> Decimal:
     if top_amount is None:
         return Decimal(lot.base_price_snapshot or 0)
 
-    current = Decimal(top_amount)
-    if current < Decimal("100000"):
-        return current + Decimal("10000")
-    if current < Decimal("400000"):
-        return current + Decimal("20000")
-    return current + Decimal("50000")
+    return next_bid_amount(Decimal(top_amount))
 
 
 def _current_highest_bid(lot: AuctionLot):

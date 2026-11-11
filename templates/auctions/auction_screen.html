@@ -1750,14 +1750,8 @@
             }
 
             // Rules
-            if (current < 100000) {
+            if (current < 300000) {
                 return {amount: current + 10000, label: "+10k"};
-            }
-            if (current >= 100000 && current < 400000) {
-                return {amount: current + 20000, label: "+20k"};
-            }
-            if (current >= 400000) {
-                return {amount: current + 50000, label: "+50k"};
             }
             return {amount: current + 20000, label: "+20k"};
         }

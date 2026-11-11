@@ -99,6 +99,30 @@ class AuctionRulesTests(TestCase):
             base_price_snapshot=Decimal(base_price),
         )
 
+    def test_bid_increments_change_at_three_lakhs_only(self):
+        from tournaments.views import _next_bid_amount
+
+        team = self.create_team("Bidder")
+        for lot_no, current, expected in (
+            (1, None, "200000"),
+            (2, "200000", "210000"),
+            (3, "290000", "300000"),
+            (4, "300000", "320000"),
+            (5, "400000", "420000"),
+        ):
+            lot = self.create_lot(f"Increment Player {lot_no}", lot_no, base_price="200000")
+            if current is not None:
+                Bid.objects.create(lot=lot, team=team, amount=Decimal(current))
+
+            self.assertEqual(_next_bid_amount(lot), Decimal(expected))
+            response = self.client.post(
+                reverse("place_bid", kwargs={"lot_id": lot.id}),
+                data='{"team_id": %d}' % team.id,
+                content_type="application/json",
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(Decimal(response.json()["amount"]), Decimal(expected))
+
     def test_setup_auction_rejects_invalid_lot1_division(self):
         for idx in range(7):
             self.create_team(f"Team {idx + 1}")
