@@ -258,6 +258,7 @@
                     </form>
                     <a class="btn btn-outline-light" href="{% url 'lot_manager' slug=tournament.slug %}">Manage Lots</a>
                 {% endif %}
+                {% if readonly_portal %}<a class="btn btn-outline-light" href="{% url 'lot_manager' slug=tournament.slug %}">View Lots</a>{% endif %}
                 {% if can_manage and not auction_setup_locked %}
                     <button class="btn btn-accent" type="button" data-bs-toggle="modal"
                             data-bs-target="#auctionSetupModal">

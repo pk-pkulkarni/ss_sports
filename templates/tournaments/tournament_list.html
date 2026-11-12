@@ -10,9 +10,9 @@
           <h1 class="mb-1" style="font-weight:800;">Tournaments</h1>
           <div class="muted">Your tournaments (only visible to your account).</div>
         </div>
-        <button class="btn btn-accent" data-bs-toggle="modal" data-bs-target="#tournamentCreateModal">
+        {% if not readonly_portal %}<button class="btn btn-accent" data-bs-toggle="modal" data-bs-target="#tournamentCreateModal">
           + Create Tournament
-        </button>
+        </button>{% endif %}
       </div>
       <div class="divider"></div>
 
@@ -84,7 +84,7 @@
           {% if owner_access_cards %}
             No organizer tournaments found for this account.
           {% else %}
-            No tournaments found. Create one using the button above.
+            No tournaments found.
           {% endif %}
         </div>
       {% endif %}
@@ -92,6 +92,7 @@
   </div>
 </div>
 
+{% if not readonly_portal %}
 <!-- Create Tournament Modal -->
 <div class="modal fade" id="tournamentCreateModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -134,4 +135,5 @@
     </div>
   </div>
 </div>
+{% endif %}
 {% endblock %}

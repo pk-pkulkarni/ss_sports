@@ -13,7 +13,7 @@ from django.db.models import Q, Count, F, Max, Sum
 from django.utils import timezone
 
 from tournaments.models import Tournament
-from tournaments.permissions import can_manage_tournament
+from tournaments.permissions import can_manage_tournament, can_view_tournament, is_tournament_viewer
 from .models import (
     AuctionLot,
     Bid,
@@ -234,7 +234,10 @@ def _validate_team_against_rules(auction: Auction, lot: AuctionLot, team: Team, 
 def _tournament_for_user(user, slug: str):
     qs = Tournament.objects.select_related("auction").prefetch_related("teams", "players")
     if not user.is_superuser:
-        qs = qs.filter(organizer=user)
+        if is_tournament_viewer(user):
+            qs = qs.filter(Q(organizer=user) | Q(organizer__is_superuser=True))
+        else:
+            qs = qs.filter(organizer=user)
     return get_object_or_404(qs, slug=slug)
 
 
@@ -247,10 +250,11 @@ def _appearance_no(lot: AuctionLot) -> int:
     return before.count() + 1
 
 
-def _current_lot_for_auction(auction: Auction):
+def _current_lot_for_auction(auction: Auction, *, read_only: bool = False):
     # Keep auction consistent with team assignments before selecting the live lot.
-    _withdraw_open_lots_for_assigned_players(auction)
-    _relist_restricted_unsold_if_needed(auction)
+    if not read_only:
+        _withdraw_open_lots_for_assigned_players(auction)
+        _relist_restricted_unsold_if_needed(auction)
     restricted_lot_no, auction_rules_config = _active_restricted_lot(auction)
 
     lot_scope = AuctionLot.objects.filter(
@@ -280,7 +284,7 @@ def _current_lot_for_auction(auction: Auction):
             .first()
         )
 
-    if current_lot and current_lot.status in [AuctionLot.Status.PENDING, AuctionLot.Status.RUNNING]:
+    if not read_only and current_lot and current_lot.status in [AuctionLot.Status.PENDING, AuctionLot.Status.RUNNING]:
         _ensure_lot_start_event(current_lot)
 
     return current_lot, auction_rules_config
@@ -716,8 +720,8 @@ def _auction_recap(auction: Auction) -> dict:
     }
 
 
-def _public_auction_snapshot(auction: Auction) -> dict:
-    current_lot, _auction_rules_config = _current_lot_for_auction(auction)
+def _public_auction_snapshot(auction: Auction, *, read_only: bool = False) -> dict:
+    current_lot, _auction_rules_config = _current_lot_for_auction(auction, read_only=read_only)
     completion = _auction_completion_summary(auction)
     total_players = AuctionLot.objects.filter(auction=auction).exclude(status=AuctionLot.Status.WITHDRAWN).count()
     sold_total = completion["sold_total"]
@@ -842,7 +846,9 @@ def auction_screen(request, slug: str):
     next_preview = None
 
     if auction:
-        current_lot, auction_rules_config = _current_lot_for_auction(auction)
+        current_lot, auction_rules_config = _current_lot_for_auction(
+            auction, read_only=is_tournament_viewer(request.user)
+        )
         completion = _auction_completion_summary(auction)
         auction_completed = completion["auction_completed"]
         auction_fully_completed = completion["auction_fully_completed"]
@@ -1353,7 +1359,7 @@ def next_lot(request, lot_id: int):
 def lot_bids(request, lot_id: int):
     lot = get_object_or_404(AuctionLot.objects.select_related("auction__tournament"), pk=lot_id)
 
-    if not can_manage_tournament(request.user, lot.auction.tournament):
+    if not can_view_tournament(request.user, lot.auction.tournament):
         return JsonResponse({"ok": False, "error": "Forbidden"}, status=403)
 
     bids = (
@@ -1381,7 +1387,7 @@ def lot_bids(request, lot_id: int):
 def auction_sold_list(request, auction_id: int):
     auction = get_object_or_404(Auction.objects.select_related("tournament"), pk=auction_id)
 
-    if not can_manage_tournament(request.user, auction.tournament):
+    if not can_view_tournament(request.user, auction.tournament):
         return JsonResponse({"ok": False, "error": "Forbidden"}, status=403)
 
     q = (request.GET.get("q") or "").strip()
@@ -1425,7 +1431,7 @@ def auction_unsold_list(request, auction_id: int):
 
     auction = get_object_or_404(Auction.objects.select_related("tournament"), pk=auction_id)
 
-    if not can_manage_tournament(request.user, auction.tournament):
+    if not can_view_tournament(request.user, auction.tournament):
         return JsonResponse({"ok": False, "error": "Forbidden"}, status=403)
 
     q = (request.GET.get("q") or "").strip()
@@ -1754,7 +1760,9 @@ def auction_updates_public(request, slug: str):
 def auction_stage_public(request, slug: str):
     tournament = get_object_or_404(Tournament.objects.select_related("auction"), slug=slug)
     auction = getattr(tournament, "auction", None)
-    snapshot = _public_auction_snapshot(auction) if auction else None
+    snapshot = _public_auction_snapshot(
+        auction, read_only=is_tournament_viewer(request.user)
+    ) if auction else None
     return render(
         request,
         "auctions/auction_stage.html",
@@ -1807,6 +1815,8 @@ def auction_updates_feed(request, slug: str):
             "ok": True,
             "events": data,
             "has_older": has_older,
-            "snapshot": _public_auction_snapshot(auction),
+            "snapshot": _public_auction_snapshot(
+                auction, read_only=is_tournament_viewer(request.user)
+            ),
         }
     )

@@ -57,8 +57,8 @@
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
     <div>
       <div class="muted">{{ tournament.name }}</div>
-      <h2 class="mb-1" style="font-weight:900;">Manage Lots (Drag & Drop)</h2>
-      <div class="muted" style="font-size:.9rem;">Only pending players can be moved.</div>
+      <h2 class="mb-1" style="font-weight:900;">{% if readonly_portal %}View Lots{% else %}Manage Lots (Drag & Drop){% endif %}</h2>
+      {% if not readonly_portal %}<div class="muted" style="font-size:.9rem;">Only pending players can be moved.</div>{% endif %}
     </div>
     <a class="btn btn-outline-light" href="{% url 'tournament_detail' slug=tournament.slug %}">Back</a>
   </div>
@@ -76,7 +76,7 @@
             {% for lot in col.lots %}
               <div
                 class="player-item {% if lot.status != 'PENDING' %}locked{% endif %}"
-                draggable="{% if lot.status == 'PENDING' %}true{% else %}false{% endif %}"
+                draggable="{% if not readonly_portal and lot.status == 'PENDING' %}true{% else %}false{% endif %}"
                 data-lot-id="{{ lot.id }}"
               >
                 <div style="font-weight:800;">{{ lot.player.name }}</div>

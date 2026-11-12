@@ -44,7 +44,7 @@ from auctions.services import (
 
 from .forms import TeamAccessForm, TeamCreateForm, TournamentCreateForm, PlayerForm
 from .models import Tournament
-from .permissions import can_access_team_dashboard, can_manage_tournament, user_team_access_qs
+from .permissions import can_access_team_dashboard, can_manage_tournament, can_view_tournament, is_tournament_viewer, user_team_access_qs
 
 
 def _ensure_auction(tournament: Tournament) -> Auction:
@@ -77,6 +77,8 @@ def _filter_tournament_qs(qs, user):
 
     if user.is_superuser:
         return qs
+    if is_tournament_viewer(user):
+        return qs.filter(Q(organizer=user) | Q(organizer__is_superuser=True))
     return qs.filter(organizer=user)
 
 
@@ -405,6 +407,8 @@ def _owner_access_for_team(user, team: Team):
 
 
 def _can_edit_owner_squad(user, team: Team, owner_access) -> bool:
+    if is_tournament_viewer(user):
+        return False
     if can_manage_tournament(user, team.tournament):
         return True
     if not owner_access:
@@ -413,6 +417,8 @@ def _can_edit_owner_squad(user, team: Team, owner_access) -> bool:
 
 
 def _can_edit_owner_strategy(user, team: Team, owner_access) -> bool:
+    if is_tournament_viewer(user):
+        return False
     if can_manage_tournament(user, team.tournament):
         return True
     if not owner_access:
@@ -1673,7 +1679,7 @@ def owner_dashboard(request, slug: str, team_id: int):
 def teams_dashboard(request, slug: str):
     tournament = get_object_or_404(Tournament, slug=slug)
     can_manage = can_manage_tournament(request.user, tournament)
-    can_view_all_teams = can_manage or user_team_access_qs(
+    can_view_all_teams = can_view_tournament(request.user, tournament) or user_team_access_qs(
         request.user
     ).filter(team__tournament=tournament).exists()
     if not can_view_all_teams:
@@ -1929,7 +1935,9 @@ def _export_players_xlsx(request, slug: str, *, eligible_only: bool):
 @login_required
 def lot_manager(request, slug: str):
     tournament = get_object_or_404(_filter_tournament_qs(Tournament, request.user), slug=slug)
-    auction = _ensure_auction(tournament)
+    auction = getattr(tournament, "auction", None)
+    if not auction and not is_tournament_viewer(request.user):
+        auction = _ensure_auction(tournament)
 
     lots = (
         AuctionLot.objects.filter(

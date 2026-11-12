@@ -4,6 +4,11 @@
 
 {% block head %}
     <style>
+        .readonly-portal .bidBox,
+        .readonly-portal .teamBtns,
+        .readonly-portal .showControlActions button,
+        .readonly-portal .announcementRow,
+        .readonly-portal .shortcutHint { display: none !important; }
         .screen {
             display: grid;
             grid-template-columns: 1.25fr .75fr;
@@ -2069,6 +2074,7 @@
 
         document.getElementById("markSold")?.addEventListener("click", () => setTimeout(loadLastSold, 900));
         document.addEventListener("keydown", async event => {
+          if (document.body.classList.contains("readonly-portal")) return;
           const target = event.target;
           if (target && (target.matches("input, textarea, select") || target.isContentEditable)) return;
           if (document.querySelector(".modal.show")) return;

@@ -191,7 +191,7 @@
 
   {% block head %}{% endblock %}
 </head>
-<body>
+<body{% if readonly_portal %} class="readonly-portal"{% endif %}>
 <div class="site-overlay">
   {% if not hide_nav %}
   <nav class="navbar navbar-expand-lg nav-glass navbar-dark">
