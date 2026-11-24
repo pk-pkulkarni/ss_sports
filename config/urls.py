@@ -79,6 +79,7 @@ urlpatterns = [
 
     # API-like endpoints (POST)
     path("auction/<int:lot_id>/bid/", auction_views.place_bid, name="place_bid"),
+    path("auction/<int:auction_id>/discussion-timer/", auction_views.auction_discussion_timer, name="auction_discussion_timer"),
     path("auction/<int:lot_id>/mark_sold/", auction_views.mark_sold, name="mark_sold"),
     path("auction/<int:lot_id>/mark_unsold/", auction_views.mark_unsold, name="mark_unsold"),
     path("auction/<int:lot_id>/next/", auction_views.next_lot, name="next_lot"),

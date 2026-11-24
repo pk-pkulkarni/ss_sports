@@ -7,7 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import render, get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST, require_GET
+from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from django.db import transaction
 from django.db.models import Q, Count, F, Max, Sum
 from django.utils import timezone
@@ -744,10 +744,27 @@ def _public_auction_snapshot(auction: Auction, *, read_only: bool = False) -> di
         "auction_fully_completed": completion["auction_fully_completed"],
         "leaderboard": _stage_leaderboard(auction),
         "presentation": _presentation_payload(auction),
+        "discussion_timer": _discussion_timer_payload(auction, current_lot),
         "storylines": _stage_storylines(auction),
         "audience": _audience_payload(auction, current_lot),
         "recap": _auction_recap(auction) if completion["auction_completed"] else None,
     }
+
+
+def _discussion_timer_payload(auction: Auction, current_lot: AuctionLot | None) -> dict:
+    payload = {"team": None, "deadline": None, "server_time": timezone.now().isoformat()}
+    if (
+        current_lot
+        and auction.status != Auction.Status.CLOSED
+        and current_lot.status in [AuctionLot.Status.PENDING, AuctionLot.Status.RUNNING]
+        and auction.discussion_lot_id == current_lot.id
+        and auction.discussion_team_id
+        and auction.discussion_deadline
+    ):
+        team = auction.discussion_team
+        payload["team"] = {"id": team.id, "name": team.name, "short_name": team.short_name or team.name}
+        payload["deadline"] = auction.discussion_deadline.isoformat()
+    return payload
 
 
 def _format_amount(amount) -> str:
@@ -880,6 +897,7 @@ def auction_screen(request, slug: str):
     else:
         auction_rules_config = normalize_auction_rules(None)
 
+    discussion_timer = _discussion_timer_payload(auction, current_lot) if auction else None
     bid_timer_seconds = int(getattr(settings, "BID_TIMER_IN_SECONDS", 0) or 0)
     appearance_no = _appearance_no(current_lot) if current_lot else None
 
@@ -894,6 +912,7 @@ def auction_screen(request, slug: str):
             "appearance_no": appearance_no,
             "highest_sold": highest_sold,
             "bid_timer_seconds": bid_timer_seconds,
+            "discussion_timer": discussion_timer,
             "auction_completed": auction_completed,
             "auction_fully_completed": auction_fully_completed,
             "sold_total": sold_total,
@@ -902,6 +921,58 @@ def auction_screen(request, slug: str):
             "next_preview": next_preview,
         },
     )
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def auction_discussion_timer(request, auction_id: int):
+    auction = get_object_or_404(Auction.objects.select_related("tournament", "discussion_team"), pk=auction_id)
+    if not can_view_tournament(request.user, auction.tournament):
+        return JsonResponse({"ok": False, "error": "Forbidden"}, status=403)
+
+    if request.method == "GET":
+        current_lot, _ = _current_lot_for_auction(auction, read_only=True)
+        return JsonResponse({"ok": True, "discussion_timer": _discussion_timer_payload(auction, current_lot)})
+
+    if not can_manage_tournament(request.user, auction.tournament):
+        return JsonResponse({"ok": False, "error": "Forbidden"}, status=403)
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+        action = payload.get("action")
+        lot_id = int(payload.get("lot_id"))
+    except (ValueError, TypeError, AttributeError, json.JSONDecodeError):
+        return JsonResponse({"ok": False, "error": "Invalid timer request."}, status=400)
+    if action not in ["start", "clear"]:
+        return JsonResponse({"ok": False, "error": "Unknown timer action."}, status=400)
+
+    with transaction.atomic():
+        auction = Auction.objects.select_for_update().select_related("tournament", "discussion_team").get(pk=auction_id)
+        current_lot, _ = _current_lot_for_auction(auction, read_only=True)
+        if not current_lot or current_lot.id != lot_id or current_lot.status not in [AuctionLot.Status.PENDING, AuctionLot.Status.RUNNING]:
+            return JsonResponse({"ok": False, "error": "The current lot has changed. Refresh the screen."}, status=400)
+        if action == "start":
+            if auction.status == Auction.Status.CLOSED:
+                return JsonResponse({"ok": False, "error": "Auction is closed."}, status=400)
+            seconds = int(getattr(settings, "BID_TIMER_IN_SECONDS", 0) or 0)
+            if seconds <= 0:
+                return JsonResponse({"ok": False, "error": "Discussion timer is disabled."}, status=400)
+            try:
+                team_id = int(payload.get("team_id"))
+            except (TypeError, ValueError):
+                return JsonResponse({"ok": False, "error": "Choose a team."}, status=400)
+            team = get_object_or_404(Team, pk=team_id, tournament=auction.tournament, is_active=True)
+            auction.discussion_team = team
+            auction.discussion_lot = current_lot
+            auction.discussion_deadline = timezone.now() + timedelta(seconds=seconds)
+        else:
+            if auction.discussion_lot_id != lot_id:
+                return JsonResponse({"ok": False, "error": "There is no timer for this lot."}, status=400)
+            auction.discussion_team = None
+            auction.discussion_lot = None
+            auction.discussion_deadline = None
+        auction.save(update_fields=["discussion_team", "discussion_lot", "discussion_deadline", "updated_at"])
+        timer = _discussion_timer_payload(auction, current_lot)
+    return JsonResponse({"ok": True, "discussion_timer": timer})
 
 
 @login_required
@@ -1030,6 +1101,11 @@ def place_bid(request, lot_id: int):
         # A valid bid always interrupts a reveal/final-call presentation. This
         # changes only what Stage Mode shows; it never decides the auction.
         auction_for_show = Auction.objects.select_for_update().get(pk=lot.auction_id)
+        if auction_for_show.discussion_team_id:
+            auction_for_show.discussion_team = None
+            auction_for_show.discussion_lot = None
+            auction_for_show.discussion_deadline = None
+            auction_for_show.save(update_fields=["discussion_team", "discussion_lot", "discussion_deadline", "updated_at"])
         if auction_for_show.presentation_state in [
             Auction.PresentationState.REVEAL,
             Auction.PresentationState.FINAL_CALL,

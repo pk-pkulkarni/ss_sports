@@ -6,6 +6,8 @@
     <style>
         .readonly-portal .bidBox,
         .readonly-portal .teamBtns,
+        .readonly-portal .discussionStart,
+        .readonly-portal #discussionClear,
         .readonly-portal .showControlActions button,
         .readonly-portal .announcementRow,
         .readonly-portal .shortcutHint { display: none !important; }
@@ -621,6 +623,18 @@
         .announcementRow { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:7px; margin-top:8px; }
         .announcementRow input { min-width:0; border-radius:11px; border:1px solid rgba(255,255,255,.15); background:rgba(2,6,23,.5); color:white; padding:.45rem .65rem; }
         .shortcutHint { margin-top:7px; color:rgba(243,247,255,.55); font-size:.68rem; }
+        .discussionBanner { display:none; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:14px; padding:14px 16px; border-radius:18px; border:2px solid #fbbf24; background:linear-gradient(105deg,rgba(245,158,11,.25),rgba(120,53,15,.18)); box-shadow:0 0 28px rgba(245,158,11,.14); }
+        .discussionBanner.show { display:flex; }
+        .discussionBanner.expired { border-color:#fb7185; background:linear-gradient(105deg,rgba(225,29,72,.3),rgba(127,29,29,.18)); box-shadow:0 0 32px rgba(244,63,94,.23); }
+        .discussionTitle { font-weight:950; font-size:1.05rem; }
+        .discussionHint { color:#fde68a; font-weight:750; font-size:.84rem; }
+        .discussionBanner.expired .discussionHint { color:#fecdd3; }
+        .discussionTime { font-size:1.7rem; font-weight:950; font-variant-numeric:tabular-nums; color:#fef3c7; }
+        .discussionBanner.expired .discussionTime { color:#ffe4e6; }
+        .discussionStart { border:1px solid rgba(251,191,36,.55); border-radius:10px; background:rgba(245,158,11,.12); color:#fde68a; font-size:.72rem; font-weight:900; padding:.45rem .6rem; }
+        .discussionStart:hover { background:rgba(245,158,11,.25); }
+        .teamRow.discussing { outline:2px solid #fbbf24; outline-offset:-2px; }
+        .teamRow.discussion-ended { outline-color:#fb7185; }
     </style>
 {% endblock %}
 
@@ -740,15 +754,15 @@
                             <div class="bidAmt" id="bidAmt">₹ {{ current_lot.base_price_snapshot|inr }}</div>
                             <div class="bidTeam" id="bidTeam">No bids yet</div>
 
-                            {% if bid_timer_seconds > 0 %}
-                                <div class="chips" style="justify-content:flex-end; margin-top:10px;">
-                                    <span class="chip2" id="bidTimerWrap" data-timer-seconds="{{ bid_timer_seconds }}">
-                                        Timer: <strong class="ms-1" id="bidTimerVal">--:--</strong>
-                                    </span>
-                                </div>
-                            {% endif %}
                         </div>
                     </div>
+
+                    {% if bid_timer_seconds > 0 %}
+                    <div class="discussionBanner" id="discussionBanner" data-endpoint="{% url 'auction_discussion_timer' auction_id=auction.id %}" role="status" aria-live="polite">
+                        <div><div class="discussionTitle" id="discussionTitle"></div><div class="discussionHint" id="discussionHint"></div></div>
+                        <div class="d-flex align-items-center gap-2"><strong class="discussionTime" id="discussionTime">0</strong><span class="discussionHint">seconds left</span><button class="btn btn-soft" type="button" id="discussionClear">Clear</button></div>
+                    </div>
+                    {% endif %}
 
                     <div class="statsPanel" id="statsPanel"  style="display: none">
                         <div class="statsRow">
@@ -946,6 +960,7 @@
                         </div>
 
                         <div class="teamBtns">
+                            {% if bid_timer_seconds > 0 %}<button class="discussionStart" type="button" data-team-id="{{ team.id }}" data-team-name="{{ team.name }}">Start {{ bid_timer_seconds }}s discussion</button>{% endif %}
                             <button class="btn-bid2 bidBtn" data-team-id="{{ team.id }}" data-shortcut="{% if forloop.counter == 10 %}0{% else %}{{ forloop.counter }}{% endif %}">BID</button>
                         </div>
                     </div>
@@ -999,6 +1014,7 @@
 {% endblock %}
 
 {% block scripts %}
+    {{ discussion_timer|json_script:"initialDiscussionTimer" }}
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <script>
         function getCookie(name) {
@@ -1031,60 +1047,65 @@
             // At auction start, NO bids yet
             let currentBid = 0;
 
-            // ---- Bid timer (front-end only) ----
-            const bidTimerWrap = document.getElementById("bidTimerWrap");
-            const bidTimerVal = document.getElementById("bidTimerVal");
-            const bidTimerSeconds = Number(bidTimerWrap?.dataset.timerSeconds || 0) || 0;
-
-            let bidTimerInterval = null;
-            let bidTimerRemaining = bidTimerSeconds;
-
-            function formatMMSS(totalSeconds) {
-                const s = Math.max(0, Number(totalSeconds) || 0);
-                const mm = String(Math.floor(s / 60)).padStart(2, "0");
-                const ss = String(s % 60).padStart(2, "0");
-                return `${mm}:${ss}`;
-            }
-
-            function setBidTimerDisplay(seconds) {
-                if (!bidTimerVal) return;
-                bidTimerVal.textContent = formatMMSS(seconds);
-            }
-
-            function stopBidTimer() {
-                if (bidTimerInterval) {
-                    clearInterval(bidTimerInterval);
-                    bidTimerInterval = null;
+            // A discussion request is presentation only. The server owns its deadline.
+            const discussionBanner = document.getElementById("discussionBanner");
+            const discussionEndpoint = discussionBanner?.dataset.endpoint;
+            let discussionTimer = null;
+            let discussionTimerKey = "";
+            let discussionEndAt = 0;
+            try { discussionTimer = JSON.parse(document.getElementById("initialDiscussionTimer")?.textContent || "null"); } catch (e) {}
+            function renderDiscussionTimer() {
+                if (!discussionBanner) return;
+                const team = discussionTimer?.team;
+                const remaining = team ? Math.max(0, Math.ceil((discussionEndAt - performance.now()) / 1000)) : 0;
+                const expired = Boolean(team && remaining === 0);
+                discussionBanner.classList.toggle("show", Boolean(team));
+                discussionBanner.classList.toggle("expired", expired);
+                if (team) {
+                    document.getElementById("discussionTitle").textContent = `${team.name} requested discussion time`;
+                    document.getElementById("discussionHint").textContent = expired ? "Time is up — organizer, check with this team." : "Discussion in progress — organizer, check with this team.";
+                    document.getElementById("discussionTime").textContent = String(remaining);
                 }
+                document.querySelectorAll(".teamRow").forEach(row => {
+                    row.classList.toggle("discussing", Boolean(team && String(team.id) === row.dataset.teamId));
+                    row.classList.toggle("discussion-ended", Boolean(expired && String(team.id) === row.dataset.teamId));
+                });
             }
-
-            function resetBidTimer() {
-                if (bidTimerSeconds <= 0) return;
-                stopBidTimer();
-                bidTimerRemaining = bidTimerSeconds;
-                setBidTimerDisplay(bidTimerRemaining);
+            function setDiscussionTimer(timer) {
+                discussionTimer = timer;
+                const key = timer?.team ? `${timer.team.id}:${timer.deadline}` : "";
+                if (key !== discussionTimerKey) {
+                    discussionTimerKey = key;
+                    discussionEndAt = key ? performance.now() + Math.max(0, new Date(timer.deadline).getTime() - new Date(timer.server_time).getTime()) : 0;
+                }
+                renderDiscussionTimer();
             }
-
-            function startBidTimer() {
-                if (bidTimerSeconds <= 0) return;
-                stopBidTimer();
-                bidTimerRemaining = bidTimerSeconds;
-                setBidTimerDisplay(bidTimerRemaining);
-
-                bidTimerInterval = setInterval(() => {
-                    bidTimerRemaining -= 1;
-                    if (bidTimerRemaining <= 0) {
-                        bidTimerRemaining = 0;
-                        setBidTimerDisplay(bidTimerRemaining);
-                        stopBidTimer();
-                        return;
-                    }
-                    setBidTimerDisplay(bidTimerRemaining);
-                }, 1000);
+            async function refreshDiscussionTimer() {
+                if (!discussionEndpoint) return;
+                try {
+                    const out = await getJSON(discussionEndpoint);
+                    setDiscussionTimer(out.discussion_timer);
+                } catch (e) { /* next poll will retry */ }
             }
-
-            // Initialize timer display if enabled
-            resetBidTimer();
+            if (discussionEndpoint) {
+                setDiscussionTimer(discussionTimer);
+                setInterval(renderDiscussionTimer, 250);
+                setInterval(refreshDiscussionTimer, 2000);
+                refreshDiscussionTimer();
+                document.querySelectorAll(".discussionStart").forEach(button => button.addEventListener("click", async () => {
+                    try {
+                        const out = await postJSON(discussionEndpoint, {action: "start", lot_id: Number(getLotId()), team_id: Number(button.dataset.teamId)});
+                        setDiscussionTimer(out.discussion_timer);
+                        showToast(`${button.dataset.teamName} discussion timer started`);
+                    } catch (e) { showToast(e.message || "Could not start discussion timer", true); }
+                }));
+                document.getElementById("discussionClear")?.addEventListener("click", async () => {
+                    try {
+                        const out = await postJSON(discussionEndpoint, {action: "clear", lot_id: Number(getLotId())});
+                        setDiscussionTimer(out.discussion_timer);
+                    } catch (e) { showToast(e.message || "Could not clear discussion timer", true); }
+                });
+            }
 
             let auctionCompleted = {{ auction_completed|yesno:"true,false" }};
             let auctionFullyCompleted = {{ auction_fully_completed|yesno:"true,false" }};
@@ -1240,8 +1261,6 @@
             }
 
             async function loadNextLot() {
-                stopBidTimer();
-
                 const out = await postJSON(`/auction/${getLotId()}/next/`, {});   // uses wrap-around logic now
                 const n = out.next;
                 const previewEl = document.getElementById("nextPlayerPreview");
@@ -1294,8 +1313,7 @@
                 bidAmtEl.textContent = formatINR(n.player.base);    // show base as starting reference
                 bidTeamEl.textContent = "No bids yet";
 
-                // Reset timer UI for the new lot
-                resetBidTimer();
+                setDiscussionTimer(null);
 
                 // Clear team highlight + enable bidding again
                 document.querySelectorAll(".teamRow").forEach(row => row.classList.remove("active-bid", "dimmed"));
@@ -1507,7 +1525,7 @@
                         currentBid = Number(out.amount);
                         updateBidButtons();
                         refreshBidHistory();
-                        startBidTimer();
+                        setDiscussionTimer(null);
 
                         // Highlight current highest team
                         document.querySelectorAll(".teamRow").forEach(row => {
@@ -1538,7 +1556,6 @@
             // Mark SOLD
             document.getElementById("markSold")?.addEventListener("click", async () => {
                 try {
-                    stopBidTimer();
                     const out = await postJSON(`/auction/${getLotId()}/mark_sold/`, {});
                     showToast(
                         `SOLD to ${out.sold_to.name} for ₹ ${Number(out.sold_price).toLocaleString("en-IN")}`
@@ -1619,7 +1636,6 @@
             // Mark UNSOLD
             document.getElementById("markUnsold")?.addEventListener("click", async () => {
                 try {
-                    stopBidTimer();
                     const out = await postJSON(`/auction/${getLotId()}/mark_unsold/`, {});
                     showToast("Marked UNSOLD");
                     document.querySelectorAll(".bidBtn").forEach(b => b.disabled = true);
@@ -1691,12 +1707,6 @@
                     // Refresh bid history panel
                     refreshBidHistory?.();
 
-                    if (out.new.team) {
-                        startBidTimer();
-                    } else {
-                        resetBidTimer();
-                    }
-
                     showToast("Last bid undone ✅");
                 } catch (e) {
                     showToast(e.message || "Undo failed", true);
@@ -1725,8 +1735,8 @@
                 try {
                     if (!confirm("End auction now?")) return;
 
-                    stopBidTimer();
                     await postJSON(`/auction/{{ auction.id }}/end/`, {});
+                    setDiscussionTimer(null);
 
                     // Lock UI
                     auctionCompleted = true;

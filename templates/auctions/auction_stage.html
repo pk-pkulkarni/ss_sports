@@ -10,6 +10,7 @@
   .site-overlay { height:100dvh; min-height:0; overflow:hidden; background:radial-gradient(circle at 18% 8%,rgba(56,189,248,.16),transparent 34%),radial-gradient(circle at 82% 90%,rgba(168,85,247,.14),transparent 35%),#020817; }
   main.container { width:100%; height:100dvh; max-width:none!important; padding:clamp(8px,1.2vh,14px)!important; }
   .stage { height:100%; display:grid; grid-template-rows:auto minmax(0,1fr) auto; gap:clamp(7px,1vh,12px); color:#f8fafc; font-family:Poppins,system-ui,sans-serif; }
+  .stage.discussion-visible { grid-template-rows:auto auto minmax(0,1fr) auto; }
   .glass { border:1px solid rgba(255,255,255,.14); background:linear-gradient(145deg,rgba(15,23,42,.94),rgba(6,14,29,.92)); box-shadow:0 18px 55px rgba(0,0,0,.34); }
   .stage-head { min-height:58px; border-radius:18px; padding:8px 13px; display:flex; align-items:center; justify-content:space-between; gap:14px; }
   .eyebrow { color:var(--stage-cyan); font-weight:900; text-transform:uppercase; letter-spacing:.14em; font-size:clamp(.62rem,1vw,.78rem); }
@@ -27,6 +28,13 @@
   .health.offline .health-dot { background:var(--stage-red); box-shadow:0 0 0 4px rgba(251,113,133,.14); }
   .stage-main { min-height:0; display:grid; grid-template-columns:minmax(0,1.62fr) minmax(330px,.88fr); gap:clamp(7px,1vw,12px); }
   .spotlight { min-height:0; border-radius:22px; padding:clamp(10px,1.4vw,18px); position:relative; overflow:hidden; display:grid; grid-template-rows:auto minmax(0,1fr) auto; }
+  .discussion-stage { display:none; min-width:0; align-items:center; justify-content:space-between; gap:12px; padding:8px 16px; border-radius:16px; border:2px solid #fbbf24; background:linear-gradient(100deg,rgba(120,53,15,.96),rgba(69,26,3,.96)); box-shadow:0 0 24px rgba(245,158,11,.22); }
+  .discussion-stage.show { display:flex; }
+  .discussion-stage.expired { border-color:#fb7185; background:linear-gradient(100deg,rgba(159,18,57,.97),rgba(76,5,25,.97)); box-shadow:0 15px 50px rgba(0,0,0,.65),0 0 34px rgba(244,63,94,.45); }
+  .discussion-stage strong { display:block; font-size:clamp(1rem,1.5vw,1.4rem); font-weight:950; }
+  .discussion-stage span { display:block; color:#fde68a; font-size:clamp(.7rem,1vw,.9rem); font-weight:800; }
+  .discussion-stage.expired span { color:#fecdd3; }
+  .discussion-stage-time { font-size:clamp(1.7rem,3vw,2.8rem); font-weight:950; font-variant-numeric:tabular-nums; white-space:nowrap; }
   .spotlight:before { content:""; position:absolute; inset:-30% -15% auto 45%; height:85%; background:radial-gradient(circle, color-mix(in srgb,var(--team-accent,var(--stage-cyan)) 30%,transparent), transparent 68%); pointer-events:none; }
   .lot-line { position:relative; display:flex; justify-content:space-between; align-items:center; gap:8px; }
   .lot-chip,.war-chip { border-radius:999px; padding:5px 10px; font-size:.68rem; font-weight:900; letter-spacing:.06em; text-transform:uppercase; border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.06); }
@@ -121,6 +129,7 @@
     <div class="head-actions"><div class="health" id="feedHealth"><span class="health-dot"></span><span id="healthText">Connecting</span></div><button class="stage-btn" id="audioToggle" type="button">Enable audio</button><button class="stage-btn" id="motionToggle" type="button">Reduce motion</button><button class="stage-btn" id="qrToggle" type="button">Phone QR</button><button class="stage-btn" id="fullscreenToggle" type="button">Fullscreen</button></div>
   </header>
   {% if not auction %}<div class="glass" style="border-radius:22px"><div class="empty"><div><h2>No auction found</h2><p>Create an auction and lots to activate Stage Mode.</p></div></div></div>{% else %}
+  <div class="discussion-stage" id="discussionStage" role="status" aria-live="polite"><div><strong id="discussionStageTitle"></strong><span id="discussionStageHint"></span></div><div class="d-flex align-items-center gap-2"><div class="discussion-stage-time" id="discussionStageTime">0</div><span>seconds left</span></div></div>
   <main class="stage-main">
     <section class="spotlight glass" id="spotlight"><div class="lot-line"><span class="lot-chip" id="lotChip">Waiting for player</span><span class="war-chip" id="warChip">🔥 Bidding war</span></div><div class="player-zone" id="playerZone"><div class="player-photo"><img id="playerPhoto" src="{% static 'img/player-placeholder.png' %}" alt="Current player"></div><div style="min-width:0"><h2 class="player-name" id="playerName">Auction ready</h2><div class="player-meta" id="playerMeta"></div><div class="stats" id="playerStats"></div></div></div><div class="bid-board"><div><div class="bid-label">Current bid</div><div class="bid-price" id="bidPrice">₹ 0</div></div><div class="leader"><img class="leader-logo" id="leaderLogo" alt="Leading team logo"><div class="leader-copy"><span>Leading team</span><strong id="leaderName">No bids yet</strong><small id="nextBid" style="color:#94a3b8"></small></div></div></div></section>
     <aside class="rail"><section class="rail-card glass"><div class="section-title"><span>Head to head</span><span id="bidCount">0 bids</span></div><div class="battle" id="battle"><div class="empty" style="grid-column:1/-1;font-size:.7rem">Waiting for the first bid</div></div></section><section class="rail-card glass"><div class="section-title"><span>Live stories</span><span id="recordPrice">No sales yet</span></div><div class="stories" id="stories"></div></section><section class="rail-card glass" style="display:grid;grid-template-rows:auto minmax(0,1fr)"><div class="section-title"><span>Team board</span><span id="teamCount">0 teams</span></div><div class="team-grid" id="teamGrid"></div></section></aside>
@@ -138,6 +147,19 @@
   const root=document.getElementById('stageRoot'); if(!root||!root.dataset.feedUrl) return; const $=id=>document.getElementById(id), placeholder=root.dataset.placeholder;
   let snapshot=null,lastEventId=0,lastSaleId=0,lastUnsoldId=0,lastBidCount=0,lastSuccess=0,lastPresentationVersion=-1,polling=false,audioOn=localStorage.getItem('auctionAudio')==='on',clockOffset=0,countdownTimer=null,soldTimer=null,unsoldTimer=null,events=[],recapShown=false;
   const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); const img=(url,fallback=placeholder)=>url||fallback; const initial=$('initialStageSnapshot'); if(initial){try{snapshot=JSON.parse(initial.textContent)}catch(e){}}
+  let discussionTimerKey='', discussionEndAt=0;
+  function renderDiscussion(){
+    const timer=snapshot?.discussion_timer, banner=$('discussionStage'); if(!banner)return;
+    const team=timer?.team, key=team?`${team.id}:${timer.deadline}`:'';
+    if(key!==discussionTimerKey){discussionTimerKey=key;discussionEndAt=key?performance.now()+Math.max(0,new Date(timer.deadline).getTime()-new Date(timer.server_time).getTime()):0}
+    const remaining=team?Math.max(0,Math.ceil((discussionEndAt-performance.now())/1000)):0, expired=Boolean(team&&remaining===0);
+    banner.classList.toggle('show',Boolean(team));banner.classList.toggle('expired',expired);root.classList.toggle('discussion-visible',Boolean(team));
+    if(!team)return;
+    $('discussionStageTitle').textContent=`${team.name} requested discussion time`;
+    $('discussionStageHint').textContent=expired?'Time is up — organizer, check with this team.':'Discussion in progress — organizer, check with this team.';
+    $('discussionStageTime').textContent=String(remaining);
+  }
+  setInterval(renderDiscussion,250);
   function tone(kind){if(!audioOn)return;try{const C=window.AudioContext||window.webkitAudioContext,ctx=new C(),seq=kind==='sold'?[523,659,784]:kind==='unsold'?[392,330,262]:kind==='final'?[740,620]:[440,554];seq.forEach((f,i)=>{const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=f;o.type='sine';g.gain.setValueAtTime(.0001,ctx.currentTime+i*.11);g.gain.exponentialRampToValueAtTime(.13,ctx.currentTime+i*.11+.015);g.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+i*.11+.1);o.connect(g).connect(ctx.destination);o.start(ctx.currentTime+i*.11);o.stop(ctx.currentTime+i*.11+.12)});setTimeout(()=>ctx.close(),800)}catch(e){}}
   function setHealth(mode,label){const h=$('feedHealth');if(!h)return;h.className='health '+mode;$('healthText').textContent=label} function setImage(el,url){if(!el)return;el.onerror=()=>{el.onerror=null;el.src=placeholder};el.src=img(url)}
   function renderLot(lot){if(!lot){$('lotChip').textContent='No active player';$('playerName').textContent=snapshot?.auction_completed?'Round complete':'Waiting for player';$('bidPrice').textContent='₹ 0';$('leaderName').textContent='No bids yet';$('playerMeta').innerHTML='';$('playerStats').innerHTML='';setImage($('playerPhoto'),'');return}

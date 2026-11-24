@@ -82,6 +82,15 @@ class Auction(models.Model):
     presentation_deadline = models.DateTimeField(null=True, blank=True)
     presentation_version = models.PositiveIntegerField(default=0)
 
+    # Organizer-controlled discussion countdown; it never affects bidding rules.
+    discussion_team = models.ForeignKey(
+        "Team", on_delete=models.SET_NULL, null=True, blank=True, related_name="discussion_auctions"
+    )
+    discussion_lot = models.ForeignKey(
+        "AuctionLot", on_delete=models.SET_NULL, null=True, blank=True, related_name="discussion_auctions"
+    )
+    discussion_deadline = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

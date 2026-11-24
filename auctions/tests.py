@@ -2,14 +2,86 @@ import json
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.test import override_settings
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
+from datetime import timedelta
 
 from tournaments.models import Tournament
 
 from .models import Auction, AuctionEvent, AuctionLot, Bid, Player, Team, TeamPlayer
 from .rules import AUCTION_TYPE_RULE_BASED, RULE_LOT1, RULE_LOT1_AND_LOT2, RULE_PRICE_CAPS
 from .services import generate_lots_from_active_players, generate_random_lots_from_active_players
+
+
+@override_settings(BID_TIMER_IN_SECONDS=3)
+class DiscussionTimerTests(TestCase):
+    def setUp(self):
+        self.organizer = get_user_model().objects.create_user(username="discussion-organizer", password="pass123")
+        self.client.force_login(self.organizer)
+        self.tournament = Tournament.objects.create(organizer=self.organizer, name="Discussion Cup", season_year=2026)
+        self.auction = Auction.objects.create(tournament=self.tournament, code="DISCUSS-1", status=Auction.Status.LIVE)
+        self.team = Team.objects.create(tournament=self.tournament, name="Discussing Team", is_active=True)
+        self.other_team = Team.objects.create(tournament=self.tournament, name="Other Team", is_active=True)
+        self.player = Player.objects.create(tournament=self.tournament, name="Current Player", is_active=True)
+        self.lot = AuctionLot.objects.create(auction=self.auction, player=self.player, lot_no=1, lot_order=1,
+                                             status=AuctionLot.Status.PENDING, base_price_snapshot=Decimal("100000"))
+        self.timer_url = reverse("auction_discussion_timer", kwargs={"auction_id": self.auction.id})
+
+    def start(self):
+        return self.client.post(self.timer_url, data=json.dumps({"action": "start", "lot_id": self.lot.id,
+                                                                  "team_id": self.team.id}), content_type="application/json")
+
+    def test_timer_is_shared_and_expiry_never_changes_bidding(self):
+        response = self.start()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["discussion_timer"]["team"]["name"], self.team.name)
+        self.assertIsNotNone(self.client.get(self.timer_url).json()["discussion_timer"]["deadline"])
+        stage = self.client.get(reverse("auction_updates_feed", kwargs={"slug": self.tournament.slug})).json()
+        self.assertEqual(stage["snapshot"]["discussion_timer"]["team"]["id"], self.team.id)
+        controller_page = self.client.get(reverse("auction_screen", kwargs={"slug": self.tournament.slug}))
+        stage_page = self.client.get(reverse("auction_stage_public", kwargs={"slug": self.tournament.slug}))
+        self.assertContains(controller_page, "Start 3s discussion")
+        self.assertContains(controller_page, "initialDiscussionTimer")
+        self.assertContains(stage_page, "discussionStage")
+
+        self.auction.discussion_deadline = timezone.now() - timedelta(seconds=1)
+        self.auction.save(update_fields=["discussion_deadline"])
+        expired_timer = self.client.get(self.timer_url).json()["discussion_timer"]
+        self.assertEqual(expired_timer["team"]["id"], self.team.id)
+        self.assertIsNotNone(expired_timer["deadline"])
+        response = self.client.post(reverse("place_bid", kwargs={"lot_id": self.lot.id}),
+                                    data=json.dumps({"team_id": self.other_team.id}), content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Bid.objects.filter(lot=self.lot, is_valid=True).count(), 1)
+        self.auction.refresh_from_db()
+        self.assertIsNone(self.auction.discussion_team_id)
+        self.assertIsNone(self.auction.discussion_deadline)
+        self.assertIsNone(self.client.get(self.timer_url).json()["discussion_timer"]["team"])
+
+    def test_timer_can_be_cleared_and_is_scoped_to_current_lot(self):
+        self.assertEqual(self.start().status_code, 200)
+        response = self.client.post(self.timer_url, data=json.dumps({"action": "clear", "lot_id": self.lot.id}),
+                                    content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["discussion_timer"]["team"])
+        self.assertEqual(self.start().status_code, 200)
+        self.lot.status = AuctionLot.Status.UNSOLD
+        self.lot.save(update_fields=["status"])
+        self.assertIsNone(self.client.get(self.timer_url).json()["discussion_timer"]["team"])
+
+    def test_only_organizer_can_start_and_team_must_belong_to_tournament(self):
+        another_user = get_user_model().objects.create_user(username="discussion-other", password="pass123")
+        self.client.force_login(another_user)
+        self.assertEqual(self.start().status_code, 403)
+        self.client.force_login(self.organizer)
+        another_tournament = Tournament.objects.create(organizer=self.organizer, name="Other Cup", season_year=2026)
+        foreign_team = Team.objects.create(tournament=another_tournament, name="Foreign Team")
+        response = self.client.post(self.timer_url,
+                                    data=json.dumps({"action": "start", "lot_id": self.lot.id, "team_id": foreign_team.id}),
+                                    content_type="application/json")
+        self.assertEqual(response.status_code, 404)
 
 
 class AuctionEligibilityTests(TestCase):
