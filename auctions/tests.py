@@ -10,9 +10,73 @@ from datetime import timedelta
 
 from tournaments.models import Tournament
 
-from .models import Auction, AuctionEvent, AuctionLot, Bid, Player, Team, TeamPlayer
+from .models import Auction, AuctionEvent, AuctionLot, Bid, Player, Team, TeamAccess, TeamPlayer
 from .rules import AUCTION_TYPE_RULE_BASED, RULE_LOT1, RULE_LOT1_AND_LOT2, RULE_PRICE_CAPS
 from .services import generate_lots_from_active_players, generate_random_lots_from_active_players
+
+
+class AuctionStartVisibilityTests(TestCase):
+    def setUp(self):
+        self.organizer = get_user_model().objects.create_user(username="start-organizer", password="pass123")
+        self.owner = get_user_model().objects.create_user(username="start-owner", password="pass123")
+        self.tournament = Tournament.objects.create(organizer=self.organizer, name="Private Lots Cup", season_year=2026)
+        self.auction = Auction.objects.create(tournament=self.tournament, code="PRIVATE-LOTS", status=Auction.Status.LIVE)
+        self.team = Team.objects.create(tournament=self.tournament, name="Private Team", is_active=True)
+        TeamAccess.objects.create(team=self.team, user=self.owner, role=TeamAccess.Role.OWNER, is_active=True)
+        self.player = Player.objects.create(tournament=self.tournament, name="First Secret Player", is_active=True)
+        self.lot = AuctionLot.objects.create(
+            auction=self.auction, player=self.player, lot_no=1, lot_order=1,
+            status=AuctionLot.Status.PENDING, base_price_snapshot=Decimal("100000"),
+        )
+        self.owner_url = reverse("owner_dashboard", kwargs={"slug": self.tournament.slug, "team_id": self.team.id})
+        self.feed_url = reverse("auction_updates_feed", kwargs={"slug": self.tournament.slug})
+        self.start_url = reverse("start_auction", kwargs={"auction_id": self.auction.id})
+
+    def test_pending_lot_stays_private_until_organizer_starts(self):
+        self.client.force_login(self.organizer)
+        controller = self.client.get(reverse("auction_screen", kwargs={"slug": self.tournament.slug}))
+        self.assertContains(controller, "Start Auction &amp; Reveal Player")
+        self.assertTrue(AuctionEvent.objects.filter(lot=self.lot, event_type=AuctionEvent.EventType.LOT_START).exists())
+
+        self.client.force_login(self.owner)
+        self.assertIsNone(self.client.get(self.owner_url).context["current_lot_payload"])
+        self.assertIsNone(self.client.get(self.feed_url).json()["snapshot"]["current_lot"])
+        self.assertEqual(self.client.get(self.feed_url).json()["events"], [])
+        self.assertEqual(
+            self.client.get(self.feed_url + "?stage=1").json()["snapshot"]["current_lot"]["player"]["name"],
+            self.player.name,
+        )
+        self.assertEqual(self.client.post(self.start_url).status_code, 403)
+
+        self.client.force_login(self.organizer)
+        self.assertEqual(self.client.post(self.start_url).status_code, 302)
+        self.auction.refresh_from_db()
+        self.assertIsNotNone(self.auction.start_time)
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.get(self.owner_url).context["current_lot_payload"]["lot"].id, self.lot.id)
+        self.assertEqual(self.client.get(self.feed_url).json()["snapshot"]["current_lot"]["player"]["name"], self.player.name)
+
+    def test_existing_running_auction_remains_visible(self):
+        self.lot.status = AuctionLot.Status.RUNNING
+        self.lot.save(update_fields=["status"])
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.get(self.owner_url).context["current_lot_payload"]["lot"].id, self.lot.id)
+
+    def test_draft_with_imported_activity_still_requires_start(self):
+        self.auction.status = Auction.Status.DRAFT
+        self.auction.save(update_fields=["status"])
+        imported_player = Player.objects.create(tournament=self.tournament, name="Imported Player", is_active=True)
+        AuctionLot.objects.create(
+            auction=self.auction, player=imported_player, lot_no=1, lot_order=2,
+            status=AuctionLot.Status.SOLD,
+        )
+        self.client.force_login(self.owner)
+        self.assertIsNone(self.client.get(self.owner_url).context["current_lot_payload"])
+        self.client.force_login(self.organizer)
+        self.assertContains(
+            self.client.get(reverse("auction_screen", kwargs={"slug": self.tournament.slug})),
+            "Start Auction &amp; Reveal Player",
+        )
 
 
 @override_settings(BID_TIMER_IN_SECONDS=3)
@@ -21,7 +85,10 @@ class DiscussionTimerTests(TestCase):
         self.organizer = get_user_model().objects.create_user(username="discussion-organizer", password="pass123")
         self.client.force_login(self.organizer)
         self.tournament = Tournament.objects.create(organizer=self.organizer, name="Discussion Cup", season_year=2026)
-        self.auction = Auction.objects.create(tournament=self.tournament, code="DISCUSS-1", status=Auction.Status.LIVE)
+        self.auction = Auction.objects.create(
+            tournament=self.tournament, code="DISCUSS-1", status=Auction.Status.LIVE,
+            start_time=timezone.now(),
+        )
         self.team = Team.objects.create(tournament=self.tournament, name="Discussing Team", is_active=True)
         self.other_team = Team.objects.create(tournament=self.tournament, name="Other Team", is_active=True)
         self.player = Player.objects.create(tournament=self.tournament, name="Current Player", is_active=True)
@@ -318,6 +385,8 @@ class AuctionRulesTests(TestCase):
         self.assertIn("already has a 700000 value player", response.json()["error"])
 
     def test_updates_feed_can_page_older_events(self):
+        self.auction.start_time = timezone.now()
+        self.auction.save(update_fields=["start_time"])
         for idx in range(105):
             AuctionEvent.objects.create(
                 auction=self.auction,
@@ -348,6 +417,8 @@ class AuctionRulesTests(TestCase):
     def test_updates_feed_includes_stage_snapshot(self):
         team = self.create_team("Stage XI")
         live_lot = self.create_lot("Spotlight Player", lot_no=3, base_price="200000")
+        self.auction.start_time = timezone.now()
+        self.auction.save(update_fields=["start_time"])
         AuctionEvent.objects.create(
             auction=self.auction,
             lot=live_lot,
@@ -444,6 +515,8 @@ class AuctionRulesTests(TestCase):
     def test_stage_snapshot_supports_ten_teams_and_competition_data(self):
         teams = [self.create_team(f"Stage Team {idx + 1}") for idx in range(10)]
         lot = self.create_lot("Battle Player", lot_no=1)
+        self.auction.start_time = timezone.now()
+        self.auction.save(update_fields=["start_time"])
         for idx in range(4):
             Bid.objects.create(
                 lot=lot,

@@ -633,7 +633,7 @@ def _build_owner_dashboard_context(user, team: Team) -> dict:
                 item["limit"] = rules["lot2_players_per_team"]
             lot_breakdown.append(item)
 
-    current_lot = _current_lot_for_owner_view(auction)
+    current_lot = _current_lot_for_owner_view(auction) if auction and auction.lots_revealed else None
     bid_status = _owner_bid_status(team, current_lot, players_count)
     current_lot_payload = None
     if current_lot:

@@ -661,6 +661,15 @@
         </div>
     {% else %}
 
+        {% if can_manage and current_lot and not auction.lots_revealed %}
+            <form method="post" action="{% url 'start_auction' auction_id=auction.id %}" class="panel mb-3">
+                {% csrf_token %}
+                <strong>Current lot is hidden from owner dashboards and public updates.</strong>
+                <span class="muted ms-2">Start the auction when teams should see the current player.</span>
+                <button type="submit" class="btn btn-accent ms-2">Start Auction &amp; Reveal Player</button>
+            </form>
+        {% endif %}
+
         <div class="screen">
             <!-- LEFT: Current lot / player -->
             <div class="panel" id="auctionLeftPanel">

@@ -97,6 +97,18 @@ class Auction(models.Model):
     def __str__(self) -> str:
         return f"{self.tournament} — {self.name}"
 
+    @property
+    def lots_revealed(self) -> bool:
+        # Imported activity in a draft auction must not reveal prepared lots.
+        if self.start_time:
+            return True
+        if self.status == self.Status.DRAFT:
+            return False
+        # Older active auctions may have activity without a recorded start time.
+        return self.lots.filter(
+            status__in=["RUNNING", "SOLD", "UNSOLD"],
+        ).exists()
+
     class Meta:
         db_table = "auction"
         indexes = [

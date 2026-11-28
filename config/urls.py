@@ -72,6 +72,7 @@ urlpatterns = [
 
     # Auction screen (UI)
     path("t/<slug:slug>/auction/", auction_views.auction_screen, name="auction_screen"),
+    path("auction/<int:auction_id>/start/", auction_views.start_auction, name="start_auction"),
     path("t/<slug:slug>/auction/updates/", auction_views.auction_updates_public, name="auction_updates_public"),
     path("t/<slug:slug>/auction/stage/", auction_views.auction_stage_public, name="auction_stage_public"),
     path("t/<slug:slug>/auction/updates/feed/", auction_views.auction_updates_feed, name="auction_updates_feed"),

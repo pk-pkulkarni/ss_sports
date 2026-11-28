@@ -5,7 +5,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from django.db import transaction
@@ -720,8 +720,10 @@ def _auction_recap(auction: Auction) -> dict:
     }
 
 
-def _public_auction_snapshot(auction: Auction, *, read_only: bool = False) -> dict:
+def _public_auction_snapshot(auction: Auction, *, read_only: bool = False, stage: bool = False) -> dict:
     current_lot, _auction_rules_config = _current_lot_for_auction(auction, read_only=read_only)
+    if not stage and not auction.lots_revealed:
+        current_lot = None
     completion = _auction_completion_summary(auction)
     total_players = AuctionLot.objects.filter(auction=auction).exclude(status=AuctionLot.Status.WITHDRAWN).count()
     sold_total = completion["sold_total"]
@@ -907,6 +909,7 @@ def auction_screen(request, slug: str):
         {
             "tournament": tournament,
             "auction": auction,
+            "can_manage": can_manage_tournament(request.user, tournament),
             "teams": teams,
             "current_lot": current_lot,
             "appearance_no": appearance_no,
@@ -921,6 +924,27 @@ def auction_screen(request, slug: str):
             "next_preview": next_preview,
         },
     )
+
+
+@login_required
+@require_POST
+def start_auction(request, auction_id: int):
+    auction = get_object_or_404(Auction.objects.select_related("tournament"), pk=auction_id)
+    if not can_manage_tournament(request.user, auction.tournament):
+        return JsonResponse({"ok": False, "error": "Forbidden"}, status=403)
+    if not auction.lots.filter(
+        status__in=[AuctionLot.Status.PENDING, AuctionLot.Status.RUNNING],
+        player__is_eligible_for_auction=True,
+    ).exists():
+        return JsonResponse({"ok": False, "error": "Generate eligible lots before starting the auction."}, status=400)
+    if not auction.start_time:
+        auction.start_time = timezone.now()
+        update_fields = ["start_time", "updated_at"]
+        if auction.status == Auction.Status.DRAFT:
+            auction.status = Auction.Status.LIVE
+            update_fields.append("status")
+        auction.save(update_fields=update_fields)
+    return redirect("auction_screen", slug=auction.tournament.slug)
 
 
 @login_required
@@ -1837,7 +1861,7 @@ def auction_stage_public(request, slug: str):
     tournament = get_object_or_404(Tournament.objects.select_related("auction"), slug=slug)
     auction = getattr(tournament, "auction", None)
     snapshot = _public_auction_snapshot(
-        auction, read_only=is_tournament_viewer(request.user)
+        auction, read_only=is_tournament_viewer(request.user), stage=True
     ) if auction else None
     return render(
         request,
@@ -1867,7 +1891,10 @@ def auction_updates_feed(request, slug: str):
     except (TypeError, ValueError):
         before_id = 0
 
+    stage = request.GET.get("stage") == "1"
     base_qs = AuctionEvent.objects.filter(auction=auction).select_related("lot", "player", "team")
+    if not stage and not auction.lots_revealed:
+        base_qs = base_qs.none()
 
     if after_id > 0:
         events = list(base_qs.filter(id__gt=after_id).order_by("id")[:100])
@@ -1892,7 +1919,7 @@ def auction_updates_feed(request, slug: str):
             "events": data,
             "has_older": has_older,
             "snapshot": _public_auction_snapshot(
-                auction, read_only=is_tournament_viewer(request.user)
+                auction, read_only=is_tournament_viewer(request.user), stage=stage
             ),
         }
     )
